@@ -1,0 +1,410 @@
+# ==============================================================================
+# SPEIIHOSTING - COMPLETE USER GUIDE
+# How to turn your PC or old laptop into a 24/7 Web Server
+# ==============================================================================
+
+Welcome to Speii! 
+Speii is a tool that turns any computer (macOS, Linux, or an old laptop/PC) into 
+a fast, secure public web server. 
+
+- No public static IP needed.
+- No router port forwarding or firewall headache.
+- Free automatic HTTPS (SSL) via Cloudflare.
+- Safe from editor auto-save: your live sites never break while you code!
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. Prerequisites (What you need before starting)
+2. Step 1: Download & Install Speii
+3. Step 2: First-Time Setup (`speiihos init`)
+4. Step 3: Host a Static Frontend Website (React, Vue, Vite, HTML)
+5. Step 4: Host a Dynamic Web App (Next.js, Django, Laravel, Nuxt, Rails)
+6. Step 5: Host a Backend Service (Python, Node.js, Express, Go)
+7. Step 6: Host a 24/7 Bot (Telegram, Discord, Slack, Workers)
+8. Step 7: Updating Your Code Safely (`speiihos deploy`)
+9. Step 8: Managing Your Services & Bots (`list`, `stop`, `start`, `logs`)
+10. Step 9: Laptop & Power Settings (Keep awake when lid is closed)
+11. Emergency Rollback (`speiihos rollback`)
+12. Command Cheat Sheet (Quick Reference)
+13. Frequently Asked Questions (FAQ)
+
+================================================================================
+1. PREREQUISITES (WHAT YOU NEED BEFORE STARTING)
+================================================================================
+Before running Speii, make sure you have:
+1. A computer (Mac, Linux, or Windows) connected to the internet.
+2. A free Cloudflare account (https://dash.cloudflare.com).
+3. A domain name pointed to Cloudflare (e.g. `yourname.com`).
+   * Cloudflare manages your DNS and provides free DDoS protection & SSL.
+4. Your website or API code ready on your machine.
+
+================================================================================
+2. STEP 1: DOWNLOAD & INSTALL SPEII
+================================================================================
+You can install Speii using your favorite package manager:
+
+Option A: via NPM (Node.js ecosystem)
+  $ npm install -g speiihosting
+  (Or run directly without installing: `npx speiihos init`)
+
+Option B: via PIP (Python ecosystem)
+  $ pip install speiihosting
+  (Or with pipx: `pipx install speiihosting`)
+
+Option C: via Standalone One-Liner (No Node or Python required)
+  - Windows 10 & 11 (PowerShell):
+    > irm https://get.speiihosting.io.ps1 | iex
+    (Or `winget install speiihosting`)
+  - macOS & Linux (Terminal):
+    $ curl -fsSL https://get.speiihosting.io | bash
+
+Verify the installation succeeded:
+  $ speiihos --version
+
+(You now have the `speiihos` command available anywhere on your machine!)
+
+================================================================================
+3. STEP 2: FIRST-TIME SETUP (`speiihos init`)
+================================================================================
+The first time you use Speii, run the initialization wizard:
+
+  $ speiihos init
+
+What Speii does for you automatically:
+1. Environment Check ("Doctor"):
+   - Checks if Nginx, Python, and cloudflared are installed.
+   - If anything is missing, Speii AUTO-INSTALLS it for you!
+2. Cloudflare Connection:
+   - Asks you to enter your Cloudflare API Token (or opens your browser to log in).
+   - Detects your domains (e.g., `mybrand.com`).
+   - Automatically provisions a secure Cloudflare Tunnel for your machine.
+3. Power & Startup Questions:
+   - Prompts: "Do you want Speii to auto-start when this computer turns on? [Y/n]"
+     (Recommended: Yes).
+   - Prompts: "Keep laptop awake when lid is closed? [y/N]"
+     (Default is No to save battery; turn on if using a dedicated laptop server).
+
+Once complete, your server engine is running in the background!
+
+================================================================================
+4. STEP 3: HOST A FRONTEND WEBSITE (REACT, VUE, VITE, HTML)
+================================================================================
+To host a static frontend website:
+
+1. Open your terminal and navigate to your frontend project:
+   $ cd ~/projects/my-portfolio
+
+2. Build your project (if using React, Vue, Vite, or Next.js static):
+   $ npm run build
+
+3. Run the host command and pick a subdomain:
+   $ speiihos host-front --subdomain portfolio
+
+What happens:
+- Speii automatically finds your build folder (`./dist`, `./build`, or `./index.html`).
+- Speii copies the files to an isolated live folder (`~/.speiihosting/sites/portfolio/live/`).
+- Speii configures Nginx with Single Page Application routing (no 404 on refresh).
+- Speii connects the subdomain `portfolio.mybrand.com` to Cloudflare.
+
+Output:
+====================================================
+🎉 Your Frontend is LIVE!
+URL:     https://portfolio.mybrand.com
+Status:  Online (HTTPS Secure)
+====================================================
+
+You can open `https://portfolio.mybrand.com` on your phone or send it to friends!
+
+================================================================================
+5. STEP 4: HOST A DYNAMIC WEB APP (NEXT.JS, DJANGO, LARAVEL, NUXT, RAILS)
+================================================================================
+What if your website is dynamic and renders HTML on the server (SSR or Full-Stack)?
+Examples: Next.js (Server Components / SSR), Django, Nuxt, Laravel, SvelteKit, Rails.
+
+Unlike static sites, dynamic web apps need:
+1. A Public Domain & SSL (Cloudflare Tunnel).
+2. A 24/7 Background Node/Python/PHP Server Process.
+3. Nginx Reverse Proxy with Static Asset Caching.
+
+1. Open your terminal and navigate to your full-stack dynamic app:
+   $ cd ~/projects/my-nextjs-app
+
+2. Run the host command with your desired subdomain and local port:
+   $ speiihos host-dynamic --subdomain myapp --port 3000
+   (or alias: speiihos host-app --subdomain myapp --port 3000)
+
+What happens automatically:
+- Speiihos auto-detects your framework (Next.js, Django, Nuxt, Laravel).
+- Copies code to isolated live staging: `~/.speiihosting/sites/myapp/live/`.
+- Spawns the web server as a 24/7 background process (auto-restarts on crash).
+- Configures Nginx reverse proxy with high-speed static asset caching (`/_next/static/`).
+- Connects `myapp.mybrand.com` to Cloudflare with free HTTPS / SSL.
+
+Output:
+====================================================
+🎉 Your Dynamic Web App is LIVE!
+URL:     https://myapp.mybrand.com
+Target:  http://127.0.0.1:3000 (PID: 64120)
+Engine:  Next.js SSR / Full-Stack Monolith
+Status:  Online (HTTPS Secure + Background Daemon Active)
+====================================================
+
+You can close your terminal / CMD! The dynamic app continues running 24/7.
+
+================================================================================
+6. STEP 5: BRING UP A BACKEND SERVICE (PYTHON, NODE.JS, EXPRESS, GO)
+================================================================================
+Backends do NOT need a domain or subdomain! 
+Speiihos simply brings up your backend as a 24/7 background service (like PM2) 
+running locally on your PC, and your frontend communicates with it directly.
+
+1. Open your terminal and navigate to your backend project:
+   $ cd ~/projects/my-api
+
+2. Start it as a background service:
+   $ speiihos host-back --port 8000
+
+What happens:
+- Speii auto-detects your service name from your folder (`my-api`) or `--name`.
+- Speii verifies that port 8000 is open (warns you if another app is using it).
+- Copies your code to the live isolated folder (`~/.speiihosting/sites/my-api/live/`).
+- Launches your backend as a 24/7 background service (auto-restarts on crash, auto-boots on reboot).
+- Automatically connects local Nginx so your frontend can communicate with it internally.
+- Zero Cloudflare setup, zero DNS records, and zero domains needed!
+
+Output:
+====================================================
+🚀 Backend Service is ACTIVE!
+Service Name:  my-api (auto-detected from folder)
+Target:        http://127.0.0.1:8000 (Local Service)
+Domain:        NONE NEEDED (Frontend communicates directly!)
+Status:        Online (Background Service Active)
+====================================================
+
+HOW TO KNOW YOUR SERVICE NAME:
+1. Auto-detected: Speiihos uses your folder name (`my-api`) or `package.json` name.
+2. Custom name: You can specify a name with `--name`:
+   $ speiihos host-back --name auth-api --port 8000
+3. Check anytime: Run `speiihos list` to view all service names and ports!
+4. Dual Identifier: You can control the service by Name OR Port:
+   $ speiihos stop my-api   (or: speiihos stop 8000)
+   $ speiihos logs my-api   (or: speiihos logs 8000)
+
+================================================================================
+7. STEP 6: HOST A 24/7 BOT (TELEGRAM, DISCORD, SLACK, AUTOMATION)
+================================================================================
+Speiihos is perfect for hosting Telegram bots, Discord bots, and background workers 
+24/7 for free on your laptop or PC!
+
+Because bots communicate outbound via long-polling or WebSockets, they require:
+- ZERO domains
+- ZERO subdomains
+- ZERO open ports
+
+1. Open your terminal and navigate to your bot project:
+   $ cd ~/projects/my-telegram-bot
+
+2. Start the bot as a 24/7 background service:
+   $ speiihos host-bot
+
+What happens automatically:
+- Speiihos detects `bot.py` or `index.js`.
+- Automatically loads your `.env` file (with `TELEGRAM_BOT_TOKEN` or `DISCORD_TOKEN`).
+- Copies code to isolated live staging: `~/.speiihosting/sites/my-telegram-bot/live/`.
+- Spawns the bot as a detached 24/7 daemon.
+- Auto-restarts if the bot crashes or network drops.
+- Auto-boots when your computer powers on!
+
+Output:
+====================================================
+🤖 Bot Service is ACTIVE!
+Service Name:  my-telegram-bot
+Mode:          Long-Polling (No port/domain needed)
+Status:        Online (Background Service Active)
+====================================================
+
+You can close your terminal / CMD immediately! Your bot stays online 24/7.
+
+================================================================================
+8. STEP 7: UPDATING YOUR CODE SAFELY (`speiihos deploy`)
+================================================================================
+IMPORTANT: Speii protects your live website from editor auto-save!
+
+While you work on your code in `~/projects/my-portfolio`:
+- You can turn on Auto-Save in VS Code.
+- You can experiment, test broken code, and make edits freely.
+- YOUR LIVE WEBSITE WILL NEVER BREAK OR CHANGE while you are coding!
+  The live website runs from an isolated live directory.
+
+WHEN YOU ARE FINISHED WITH YOUR CHANGES AND READY TO UPDATE:
+Simply navigate to your project folder and run:
+
+  $ speiihos deploy
+
+What `speiihos deploy` does automatically:
+1. Automatically backs up your current working version.
+2. Atomically replaces the old live files with your new code.
+3. For Frontend: Automatically purges Cloudflare's edge cache so everyone sees 
+   the update immediately.
+4. For Backend: Gracefully restarts the background process in milliseconds.
+5. Zero downtime! Your site stays live throughout the update.
+
+================================================================================
+9. STEP 8: MANAGING YOUR SERVICES & BOTS
+================================================================================
+Speii gives you PM2 and Systemctl-style control over your hosted sites:
+
+1. View all hosted sites and their status:
+   $ speiihos list
+
+   Example output:
+   Name        Type      Port/Path               URL                            Status
+   portfolio   Frontend  ~/.speiihosting/sites/port...  https://portfolio.mybrand.com  [RUNNING]
+   api         Backend   http://127.0.0.1:8000   https://api.mybrand.com        [RUNNING]
+
+2. Temporarily pause a site (takes it offline immediately):
+   $ speiihos stop portfolio
+
+3. Bring a paused site back online:
+   $ speiihos start portfolio
+
+4. Restart a backend process (reloads code):
+   $ speiihos restart api
+
+5. View past logs and live streams (Smart 5 MB Capped Rotation):
+   $ speiihos logs api             # View last 100 lines of logs
+   $ speiihos logs api -n 500      # View last 500 lines of log history
+   $ speiihos logs api -f          # Stream live logs in real time (Ctrl+C to exit)
+   $ speiihos logs api --clear     # Clear logs back to 0 bytes immediately
+   (Speii automatically rotates logs with a strict 5 MB cap per file, preserving 
+    thousands of lines of error history without ever overloading your hard drive!).
+
+6. Delete a website and remove its subdomain:
+   $ speiihos remove portfolio
+
+================================================================================
+10. STEP 9: LAPTOP & POWER SETTINGS
+================================================================================
+If you are using an old laptop as a permanent server, you probably want to 
+close the lid and put it on a shelf without it going to sleep.
+
+1. Enable Lid-Close Sleep Prevention:
+   $ speiihos config set sleep_prevent on
+   (Your laptop screen turns off, but the server keeps hosting 24/7).
+
+2. Disable Lid-Close Sleep Prevention (For temporary personal laptops):
+   $ speiihos config set sleep_prevent off
+
+3. Toggle Auto-Start on Machine Boot:
+   $ speiihos config set autostart on
+   (When your computer restarts, Speii boots up and resurrects all your sites!).
+
+4. View all your current settings:
+   $ speiihos config show
+
+================================================================================
+11. EMERGENCY ROLLBACK (`speiihos rollback`) & STORAGE SAFEGUARDS
+================================================================================
+Did you run `speiihos deploy` and realize your new code introduced a critical bug?
+Don't panic! Speii keeps the previous working release ready for instant rollback.
+
+Simply run:
+  $ speiihos rollback portfolio
+  # or
+  $ speiihos rollback api
+
+In 1 second, Speii restores the previous stable release, putting your working 
+website back online instantly!
+
+ZERO-STORAGE BLOAT GUARANTEE:
+- Single-Version Rollback Cap: Speii strictly saves only ONE previous version 
+  (overwritten on each deploy). It never accumulates historical versions (v1, v2, v3).
+- Heavy Folder Exclusions: Directories like `node_modules/`, `.git/`, and `.venv/` 
+  are NEVER copied into the rollback backup.
+- Free Up Disk Space Manually:
+  If you want to delete the rollback backup and reclaim 100% of backup disk space:
+  $ speiihos clean portfolio      # Deletes rollback snapshot for portfolio
+  $ speiihos clean --all          # Deletes rollback snapshots for all sites
+
+================================================================================
+12. COMMAND CHEAT SHEET (QUICK REFERENCE)
+================================================================================
+
+Setup & Configuration:
+  speiihos init                     Run setup doctor & Cloudflare login wizard
+  speiihos doctor                   Check system requirements & auto-install tools
+  speiihos config show              View all current settings
+  speiihos config set <key> <val>   Update a specific setting
+
+Hosting:
+  speiihos host-front --subdomain <name>   Host static frontend (React, Vue, HTML)
+  speiihos host-dynamic --subdomain <name> --port <num>  Host dynamic SSR web (Next.js, Django, Laravel)
+  speiihos host-back --port <number>       Run backend as background service (no domain needed)
+  speiihos host-bot                        Run Telegram/Discord bot 24/7 (no domain needed)
+
+Deploying & Rollback:
+  speiihos deploy                   Publish code updates to live site
+  speiihos rollback <name>          Revert live site to previous working version
+  speiihos clean <name>             Delete rollback backup to free up disk space
+  speiihos clean --all              Purge rollback backups across all sites
+  speiihos purge <name>             Clear Cloudflare CDN cache for that subdomain
+
+Service Lifecycle:
+  speiihos list                     List all hosted websites and their URLs
+  speiihos start <name>             Start a stopped website
+  speiihos stop <name>              Stop/pause a running website
+  speiihos restart <name>           Restart a website's service
+  speiihos logs <name>              View recent logs (last 100 lines)
+  speiihos logs <name> -n <num>     View last N lines of log history
+  speiihos logs <name> -f           Stream live logs in real time
+  speiihos logs <name> --clear      Reset log file back to 0 bytes
+  speiihos clean --logs             Purge all log files across all sites
+  speiihos remove <name>            Permanently delete a hosted site
+
+Master Server Control:
+  speiihos service start            Start master Cloudflare tunnel & Nginx
+  speiihos service stop             Pause all hosting on this computer
+  speiihos service status           Check overall server health & uptime
+
+================================================================================
+13. FREQUENTLY ASKED QUESTIONS (FAQ)
+================================================================================
+
+Q1: Can I host multiple websites on one laptop?
+A: YES! You can host as many frontend websites and backend APIs as your laptop's 
+   RAM and CPU can handle. 
+   - All frontends share Port 80 (zero port conflicts).
+   - Each backend uses a distinct internal port, and Speii prevents port collisions.
+
+Q2: What happens if one website crashes?
+A: Speii uses Service Fault Isolation (Zero Blast Radius). If one backend crashes, 
+   only that site is affected. All your other websites and APIs remain 100% online!
+
+Q3: What happens when my computer shuts down or restarts?
+A: When your computer turns back on, Speii's background daemon automatically boots 
+   up and resurrects all websites that were running before the shutdown.
+
+Q4: Do I need a public static IP or router port forwarding?
+A: NO! Cloudflare Tunnel establishes an outbound encrypted connection to Cloudflare. 
+   It works behind CGNAT, home Wi-Fi, mobile hotspots, and firewalls without opening 
+   any ports on your router.
+
+Q5: If I close Terminal or Command Prompt (CMD), do my services still run?
+A: YES, 100%! All websites and backend services run as decoupled background 
+   daemons (detached processes). You can close Command Prompt, PowerShell, 
+   Terminal, or quit VS Code completely, and all your sites and APIs will continue 
+   running 24/7 in the background without interruption!
+
+Q6: Will Speii fill up my hard drive with logs and rollback backups?
+A: ABSOLUTELY NOT! Speii balances developer convenience with strict disk safety:
+   1. Smart Capped Log Rotation: Speii saves logs to disk so you can easily view 
+      past error history and stack traces, but enforces a strict 5 MB size cap with 
+      automatic rotation (maximum 10 MB total per service). Even running 24/7 for 
+      years, logs will NEVER consume your hard drive!
+   2. Single-Version Rollback Cap: Speii only keeps 1 previous release backup 
+      (overwritten on every deploy). It never piles up dozens of old versions.
+   3. Smart Exclusions: Giant folders like `node_modules/`, `.git/`, `.venv/`, 
+      and build caches are strictly excluded from backups.
+   4. Instant Clean Commands: You can run `speiihos logs <name> --clear` or 
+      `speiihos clean --logs` at any time to immediately reclaim disk space.
