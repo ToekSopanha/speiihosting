@@ -272,15 +272,24 @@ Speii gives you PM2 and Systemctl-style control over your hosted sites:
 4. Restart a backend process (reloads code):
    $ speiihos restart api
 
-5. View past logs and live streams (Smart 5 MB Capped Rotation):
-   $ speiihos logs api             # View last 100 lines of logs
+5. View past logs and live streams (Apps & Nginx HTTP traffic):
+   $ speiihos logs api             # View last 100 lines of API logs
    $ speiihos logs api -n 500      # View last 500 lines of log history
    $ speiihos logs api -f          # Stream live logs in real time (Ctrl+C to exit)
-   $ speiihos logs api --clear     # Clear logs back to 0 bytes immediately
-   (Speii automatically rotates logs with a strict 5 MB cap per file, preserving 
-    thousands of lines of error history without ever overloading your hard drive!).
+   $ speiihos logs nginx           # View incoming Nginx HTTP access & error logs
+   $ speiihos logs nginx -f        # Stream live web visitor traffic
 
-6. Delete a website and remove its subdomain:
+6. Inspect log file sizes on disk:
+   $ speiihos logs size
+   (Shows a table of every log file, its line count, and exact file size in KB/MB).
+
+7. Clear logs manually (Self-service):
+   $ speiihos logs clear api       # Clear api logs back to 0 bytes immediately
+   $ speiihos logs clear nginx     # Clear Nginx access and error logs
+   $ speiihos logs clear --all     # Clear all logs across all sites and Nginx
+   (All logs are also protected by automatic 5 MB rotation caps so they never grow runaway!).
+
+8. Delete a website and remove its subdomain:
    $ speiihos remove portfolio
 
 ================================================================================
@@ -358,8 +367,11 @@ Service Lifecycle:
   speiihos logs <name>              View recent logs (last 100 lines)
   speiihos logs <name> -n <num>     View last N lines of log history
   speiihos logs <name> -f           Stream live logs in real time
-  speiihos logs <name> --clear      Reset log file back to 0 bytes
-  speiihos clean --logs             Purge all log files across all sites
+  speiihos logs nginx               View incoming Nginx HTTP access & error logs
+  speiihos logs size                Display table of all log files and their sizes on disk
+  speiihos logs clear <name>        Clear log file for a service back to 0 bytes
+  speiihos logs clear nginx         Clear Nginx access and error logs
+  speiihos logs clear --all         Purge all log files across all sites and Nginx
   speiihos remove <name>            Permanently delete a hosted site
 
 Master Server Control:
@@ -397,14 +409,14 @@ A: YES, 100%! All websites and backend services run as decoupled background
    running 24/7 in the background without interruption!
 
 Q6: Will Speii fill up my hard drive with logs and rollback backups?
-A: ABSOLUTELY NOT! Speii balances developer convenience with strict disk safety:
-   1. Smart Capped Log Rotation: Speii saves logs to disk so you can easily view 
-      past error history and stack traces, but enforces a strict 5 MB size cap with 
-      automatic rotation (maximum 10 MB total per service). Even running 24/7 for 
-      years, logs will NEVER consume your hard drive!
-   2. Single-Version Rollback Cap: Speii only keeps 1 previous release backup 
-      (overwritten on every deploy). It never piles up dozens of old versions.
-   3. Smart Exclusions: Giant folders like `node_modules/`, `.git/`, `.venv/`, 
-      and build caches are strictly excluded from backups.
-   4. Instant Clean Commands: You can run `speiihos logs <name> --clear` or 
-      `speiihos clean --logs` at any time to immediately reclaim disk space.
+A: ABSOLUTELY NOT! Speii balances full developer visibility with strict disk safety:
+   1. Active Nginx & App Logs: Nginx HTTP access logs and application logs are fully 
+      enabled so you can see all incoming traffic, HTTP status codes (200, 404, 500), and errors.
+   2. Smart 5 MB Capped Rotation: Logs automatically rotate when they hit 5 MB 
+      (max 10 MB total per service), so they can NEVER consume your disk space.
+   3. Check Log Sizes Anytime: Run `speiihos logs size` to view the exact disk space 
+      used by every log file in real time.
+   4. Self-Service Clearing: You have full control to clear any log file at any time 
+      via `speiihos logs clear <name>`, `speiihos logs clear nginx`, or `speiihos logs clear --all`.
+   5. Single-Version Rollback Cap: Speii only keeps 1 previous release backup 
+      (overwritten on every deploy).

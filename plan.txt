@@ -440,10 +440,12 @@ How Speii remembers configurations, running services, and state across reboots:
    │       ├── live/        # Currently active live version
    │       └── previous/    # Single last stable version for instant rollback (never multiple versions!)
    └── logs/                # Size-capped rotating logs per service (strict 5 MB limit!)
-       ├── portfolio.log
-       ├── api.log
-       ├── telegram-bot.log
-       └── speii-daemon.log
+       ├── portfolio.log     # Frontend static request logs / app logs
+       ├── api.log           # Backend service stdout / stderr
+       ├── telegram-bot.log  # Bot worker console output
+       ├── nginx_access.log  # Full Nginx HTTP request logs (IP, path, status, latency)
+       ├── nginx_error.log   # Nginx gateway & reverse proxy errors
+       └── speii-daemon.log  # Supervisor daemon events
    (NOTE: Strict 5 MB rotation cap per log file prevents runaway disk bloat while retaining ~50,000 lines of history!).
 
 3. GLOBAL CONFIG FILE (`~/.speiihosting/config.json`):
@@ -629,9 +631,34 @@ Production Directory.
      * `speiihos logs <name> -n 500`: Shows last 500 lines (or any specified count).
      * `speiihos logs <name> --clear`: Empties the log file back to 0 bytes immediately.
      * `speiihos clean --logs`: Wipes all service log files to instantly free disk space.
-   - Nginx Quiet Mode (Zero Web Server Bloat):
-     * High-volume HTTP access logs are set to `access_log off;` to prevent disk wear.
-     * Backend/bot application `stdout` and `stderr` capture all application events and errors.
+   - Full Nginx Access & Error Logging (Enabled!):
+     * `access_log ~/.speiihosting/logs/nginx_access.log combined;`
+     * `error_log ~/.speiihosting/logs/nginx_error.log warn;`
+     * Allows developers to see all incoming HTTP web traffic, client IP addresses, 
+       requested paths, HTTP status codes (200, 301, 404, 500, 502), and proxy latency.
+     * View anytime with `speiihos logs nginx` or stream live with `speiihos logs nginx -f`.
+
+   - Log Size Inspection (`speiihos logs size`):
+     * Users can check the exact file size and line count of every log file on disk:
+       $ speiihos logs size
+       ========================================================================
+       LOG FILE                 TYPE              SIZE       LINES
+       ========================================================================
+       portfolio.log            Frontend SPA      1.2 MB     14,200
+       api.log                  Backend Service   3.8 MB     42,100
+       telegram-bot.log         Bot Worker        0.5 MB      6,300
+       nginx_access.log         Nginx HTTP Access 2.1 MB     22,000
+       nginx_error.log          Nginx Gateway     0.1 MB        450
+       speii-daemon.log         Supervisor        0.2 MB      1,800
+       ========================================================================
+       Total Disk Space Used by Logs: 7.9 MB (Safe - within 10 MB per-service limits)
+       ========================================================================
+
+   - Self-Service Log Clearing (`speiihos logs clear`):
+     * Users have 100% control to clear log files whenever they wish:
+       $ speiihos logs clear <name>   # Truncates that service log file back to 0 bytes
+       $ speiihos logs clear nginx    # Truncates Nginx access & error logs to 0 bytes
+       $ speiihos logs clear --all    # Clears all log files across all services and Nginx
 
 ================================================================================
 [14] SYSTEM ARCHITECTURE DIAGRAM
@@ -706,8 +733,12 @@ Production Directory.
 5. Monitoring & Management:
    - `speiihos list`: Displays all active frontend and backend hosted sites, paths/ports, and status.
    - `speiihos remove <name>`: Permanently deletes vhost, removes Cloudflare DNS entry, kills process.
-   - `speiihos logs <name>`: Displays recent logs (supports `-n <lines>`, `-f` for live stream, `--clear`).
-   - `speiihos clean --logs`: Wipes all log files across all services to free disk space.
+   - `speiihos logs <name>`: Displays recent logs (supports `-n <lines>`, `-f` for live stream).
+   - `speiihos logs nginx`: Displays Nginx HTTP access and error logs.
+   - `speiihos logs size`: Displays interactive table of all log files and their disk sizes.
+   - `speiihos logs clear <name>`: Clears a specific service's log file back to 0 bytes.
+   - `speiihos logs clear nginx`: Clears Nginx access and error logs.
+   - `speiihos logs clear --all`: Wipes all log files across all services and Nginx.
    - `speiihos purge <name>`: Purges Cloudflare edge cache for fresh frontend deployment.
    - `speiihos sleep-prevent`: Configures OS power settings so laptop doesn't sleep when lid is closed.
 
@@ -910,15 +941,23 @@ Temporarily stop or start a site:
   $ speiihos stop portfolio       # Takes portfolio offline immediately
   $ speiihos start portfolio      # Brings portfolio back online
 
-View and follow logs (Capped at 5 MB rotation - never overfills disk!):
-  $ speiihos logs api             # View last 100 lines of logs
-  $ speiihos logs api -n 500      # View last 500 lines of logs
+View and follow logs (Nginx + Apps, capped at 5 MB rotation):
+  $ speiihos logs api             # View last 100 lines of API logs
+  $ speiihos logs api -n 500      # View last 500 lines of history
   $ speiihos logs api -f          # Stream live logs in real time (press Ctrl+C to exit)
-  $ speiihos logs api --clear     # Clear logs back to 0 bytes immediately
+  $ speiihos logs nginx           # View incoming Nginx HTTP access & error logs
+  $ speiihos logs nginx -f        # Stream live web visitor traffic
 
-Free up disk space:
+Check log file sizes:
+  $ speiihos logs size            # Inspect exact file size of every log on disk
+
+Clear logs manually (Self-service):
+  $ speiihos logs clear api       # Clear api logs back to 0 bytes immediately
+  $ speiihos logs clear nginx     # Clear Nginx access and error logs
+  $ speiihos logs clear --all     # Clear all logs across all sites
+
+Free up rollback backup space:
   $ speiihos clean api            # Purges the rollback backup for api
-  $ speiihos clean --logs         # Clears all log files across all sites
 
 Close the laptop lid and put it on a shelf:
   The laptop continues hosting 24/7 silently!

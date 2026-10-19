@@ -338,43 +338,63 @@ SpeiiHosting is engineered to run on laptops and modest PCs with limited disk sp
 
 ---
 
-### Rule 2: Smart Capped Log Rotation (5 MB Limit)
+### Rule 2: Active Nginx & App Logging with Capped Rotation & Self-Service Size Control
 
-Traditional web servers allow log files to grow indefinitely until a 100 GB hard drive fills up and crashes the OS. Speii fixes this with **Smart Capped Log Rotation**:
+Developers need full visibility into incoming web traffic, HTTP status codes, client IPs, and server errors. Speii keeps **Nginx access logs and application logs fully enabled**, while providing total transparency into file sizes and complete self-service control to clear them:
 
 ```
-App Output (stdout/stderr)
+Web Requests & App stdout/stderr
            │
-           ▼
-~/.speiihosting/logs/<name>.log  (Max 5 MB / ~50,000–100,000 lines)
-           │
-           ▼ (When 5 MB is reached)
-Rotates to: <name>.log.1 (Previous archive)
-           │
-           ▼ (When next 5 MB is reached)
-Old <name>.log.1 is purged (Strict 10 MB maximum total per service!)
+           ├──► ~/.speiihosting/logs/nginx_access.log  (HTTP traffic: IP, path, status 200/404/500)
+           ├──► ~/.speiihosting/logs/nginx_error.log   (Nginx gateway errors & timeouts)
+           └──► ~/.speiihosting/logs/<name>.log        (App/Bot console output & exceptions)
 ```
 
-#### Log Management Commands:
+#### 1. Full Visibility into Nginx HTTP Web Traffic:
 ```bash
-# 1. View recent logs (default last 100 lines)
-speiihos logs api
+# View recent Nginx access and error logs
+speiihos logs nginx
 
-# 2. View deeper history (e.g. 500 lines) to inspect past crashes
-speiihos logs api -n 500
-
-# 3. Stream live logs in real time as requests arrive (like tail -f)
-speiihos logs api -f
-
-# 4. Clear a service's log file back to 0 bytes immediately
-speiihos logs api --clear
-
-# 5. Clear all log files across all services
-speiihos clean --logs
+# Stream live web visitor traffic in real time
+speiihos logs nginx -f
 ```
 
-- **Guaranteed Ceiling:** Even if your server runs for years, a service's logs will **never exceed 10 MB on disk**.
-- **Nginx Web Logs:** Set to `access_log off;` to prevent high-frequency web requests from creating disk bloat or wearing out SSDs.
+#### 2. Inspecting Exact Log File Sizes on Disk:
+Users can check the exact disk space consumed by every log file at any time:
+```bash
+speiihos logs size
+```
+Example Output:
+```text
+========================================================================
+LOG FILE                 TYPE              SIZE       LINES
+========================================================================
+portfolio.log            Frontend SPA      1.2 MB     14,200
+api.log                  Backend Service   3.8 MB     42,100
+telegram-bot.log         Bot Worker        0.5 MB      6,300
+nginx_access.log         Nginx HTTP Access 2.1 MB     22,000
+nginx_error.log          Nginx Gateway     0.1 MB        450
+speii-daemon.log         Supervisor        0.2 MB      1,800
+========================================================================
+Total Disk Space Used by Logs: 7.9 MB (Safe - within 10 MB per-service limits)
+========================================================================
+```
+
+#### 3. Self-Service Log Clearing:
+Users have full manual control to clear any log file back to 0 bytes whenever they want:
+```bash
+# Clear a specific service's log file
+speiihos logs clear api
+
+# Clear Nginx HTTP access & error logs
+speiihos logs clear nginx
+
+# Clear all log files across all sites and Nginx
+speiihos logs clear --all
+```
+
+#### 4. Automatic Safety Rotation:
+- Every log file is automatically rotated when it reaches **5 MB** (max 1 backup archive = 10 MB maximum total per service). Even if you forget to clear logs, your hard drive will **never run out of space**.
 
 ---
 
@@ -458,7 +478,11 @@ speiihos config show
 | `speiihos logs <name>` | Displays recent logs (default 100 lines). |
 | `speiihos logs <name> -n <num>` | Displays last N lines of log history (e.g. `-n 500`). |
 | `speiihos logs <name> -f` | Streams live logs in real time (press `Ctrl+C` to exit). |
-| `speiihos logs <name> --clear` | Empties the log file back to 0 bytes immediately. |
+| `speiihos logs nginx` | Displays incoming Nginx HTTP access and error logs. |
+| `speiihos logs size` | Displays formatted table of all log files and their exact disk sizes. |
+| `speiihos logs clear <name>` | Empties that service's log file back to 0 bytes immediately. |
+| `speiihos logs clear nginx` | Empties Nginx access & error logs to 0 bytes. |
+| `speiihos logs clear --all` | Clears all log files across all sites and Nginx. |
 | `speiihos remove <name>` | Permanently deletes a site, removes vhost, kills process, and unlinks files. |
 
 ### Master Service Controls
@@ -507,7 +531,12 @@ Follow these golden rules to keep your self-hosted server secure, fast, and heal
 **A:** Yes, 100%! All services run as detached background daemons. You can close your terminal, shut down VS Code, and disconnect — your services will stay online 24/7.
 
 ### Q6: Will Speii fill up my hard drive with logs and rollback backups?
-**A:** No. Speii strictly caps rollback backups to **1 single previous version** (excluding `node_modules` and `.venv`), and logs are automatically rotated with a **5 MB hard cap** per file (maximum 10 MB total per service). You can also run `speiihos clean --all` anytime to clear backup files.
+**A:** No. Speii balances complete developer visibility with strict disk safety:
+1. **Nginx & App Logs Enabled:** Nginx HTTP access logs and application logs are fully active, so you can track all incoming web traffic, status codes (200, 404, 500), and errors.
+2. **Inspect Sizes Anytime:** Run `speiihos logs size` to view the exact disk space used by every log file.
+3. **Self-Service Clearing:** You can clear any log file at any time using `speiihos logs clear <name>`, `speiihos logs clear nginx`, or `speiihos logs clear --all`.
+4. **Automatic Safety Cap:** Logs automatically rotate when they hit 5 MB (maximum 10 MB total per service), so they can never cause disk exhaustion even if left unattended.
+5. **Rollback Backup Limit:** Rollback is strictly capped at 1 single previous version (excluding `node_modules` and `.venv`).
 
 ---
 
