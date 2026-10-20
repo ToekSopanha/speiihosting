@@ -1,4 +1,6 @@
+import io
 import json
+import tarfile
 import time
 
 import httpx
@@ -158,19 +160,35 @@ def test_node_rollback_preserves_a_real_installed_local_dependency(store, tmp_pa
     if not shutil.which("npm"):
         pytest.skip("requires Node/npm")
     source = tmp_path / "node-worker"
-    vendor = source / "vendor/local-dep"
+    vendor = source / "vendor"
     vendor.mkdir(parents=True)
-    (source / "package.json").write_text(
-        json.dumps(
-            {
-                "name": "node-worker",
-                "scripts": {"start": "node bot.js"},
-                "dependencies": {"local-dep": "file:./vendor/local-dep"},
-            }
+
+    def write_dependency(version, value):
+        archive = vendor / f"local-dep-{version}.tgz"
+        files = {
+            "package.json": json.dumps(
+                {"name": "local-dep", "version": version, "main": "index.js"}
+            ),
+            "index.js": f"module.exports = '{value}';",
+        }
+        # Install a real offline package, without directory links to candidate/.
+        with tarfile.open(archive, "w:gz") as package:
+            for name, contents in files.items():
+                data = contents.encode()
+                entry = tarfile.TarInfo(f"package/{name}")
+                entry.size, entry.mode = len(data), 0o644
+                package.addfile(entry, io.BytesIO(data))
+        (source / "package.json").write_text(
+            json.dumps(
+                {
+                    "name": "node-worker",
+                    "scripts": {"start": "node bot.js"},
+                    "dependencies": {"local-dep": f"file:./vendor/{archive.name}"},
+                }
+            )
         )
-    )
-    (vendor / "package.json").write_text('{"name":"local-dep","version":"1.0.0","main":"index.js"}')
-    (vendor / "index.js").write_text("module.exports = 'dependency-one';")
+
+    write_dependency("1.0.0", "dependency-one")
     (source / "bot.js").write_text(
         "console.log(require('local-dep')); setInterval(() => {}, 1000);"
     )
@@ -179,10 +197,17 @@ def test_node_rollback_preserves_a_real_installed_local_dependency(store, tmp_pa
     )
     manager = Manager(store)
     service = manager.host("bot", source)
-    (vendor / "index.js").write_text("module.exports = 'dependency-two';")
-    manager.deploy(service.name)
     site = store.site(service.name)
+    dependency = site / "live/node_modules/local-dep"
+    assert dependency.resolve() == dependency
+    write_dependency("2.0.0", "dependency-two")
+    manager.deploy(service.name)
     assert (site / "previous/node_modules/local-dep/index.js").exists()
+    assert (
+        site / "live/node_modules/local-dep/index.js"
+    ).read_text() == "module.exports = 'dependency-two';"
+    previous_dependency = site / "previous/node_modules/local-dep"
+    assert previous_dependency.resolve() == previous_dependency
 
     def offline(*args, **kwargs):
         raise AssertionError("Rollback unexpectedly attempted an installation")
@@ -192,6 +217,7 @@ def test_node_rollback_preserves_a_real_installed_local_dependency(store, tmp_pa
     assert (
         site / "live/node_modules/local-dep/index.js"
     ).read_text() == "module.exports = 'dependency-one';"
+    assert dependency.resolve() == dependency
     assert alive(store, service.name)
 
 

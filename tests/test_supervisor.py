@@ -1,3 +1,4 @@
+import io
 import sys
 import time
 from types import SimpleNamespace
@@ -7,7 +8,7 @@ import pytest
 
 from speiihosting.config import SpeiiError
 from speiihosting.manager import Manager
-from speiihosting.process import Worker, alive, close_logger, logger_for, stop_daemon
+from speiihosting.process import Worker, alive, close_logger, logger_for, pump, stop_daemon
 
 
 def eventually(predicate, timeout=10):
@@ -123,3 +124,51 @@ def test_log_rotation_is_bounded(tmp_path, monkeypatch):
     logs = list(tmp_path.glob("bounded.log*"))
     assert len(logs) == 2
     assert all(p.stat().st_size <= 10_000 for p in logs)
+
+
+def test_log_pump_preserves_fragmented_lines_and_utf8(tmp_path):
+    class FragmentedPipe(io.BytesIO):
+        def __init__(self):
+            super().__init__()
+            self.fragments = iter(
+                [
+                    b"v1",
+                    b" ",
+                    b"env-",
+                    b"loaded",
+                    b"\r",
+                    b"\n",
+                    b"\xe2",
+                    b"\x82",
+                    b"\xac\n",
+                    b"tail",
+                ]
+            )
+
+        def read1(self, size):
+            return next(self.fragments, b"")
+
+    path = tmp_path / "fragmented.log"
+    pipe = FragmentedPipe()
+    logger = logger_for(path)
+    try:
+        pump(pipe, logger)
+    finally:
+        close_logger(logger)
+    assert pipe.closed
+    assert path.read_text(encoding="utf-8") == "v1 env-loaded\n€\ntail\n"
+
+
+def test_log_pump_bounds_long_output_without_losing_data(tmp_path):
+    payload = "x" * 20_000
+    pipe = io.BytesIO(payload.encode())
+    path = tmp_path / "long-output.log"
+    logger = logger_for(path)
+    try:
+        pump(pipe, logger)
+    finally:
+        close_logger(logger)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert "".join(lines) == payload
+    assert all(len(line) <= 8192 for line in lines)
+    assert pipe.closed

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import logging
 import logging.handlers
 import os
@@ -36,9 +37,24 @@ def close_logger(logger: logging.Logger) -> None:
 
 
 def pump(pipe, logger: logging.Logger) -> None:
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pending = ""
     try:
         while block := pipe.read1(8192):
-            logger.info(block.decode("utf-8", errors="replace").rstrip("\n"))
+            # Pipe reads can split one print() or a UTF-8 character anywhere.
+            pending += decoder.decode(block)
+            while pending:
+                newline = pending.find("\n")
+                complete = 0 <= newline <= 8192
+                if not complete and len(pending) < 8192:
+                    break
+                end = newline if complete else 8192
+                line = pending[:end]
+                logger.info(line.removesuffix("\r") if complete else line)
+                pending = pending[end + int(complete) :]
+        pending += decoder.decode(b"", final=True)
+        if pending:
+            logger.info(pending)
     finally:
         pipe.close()
 

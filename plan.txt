@@ -133,8 +133,22 @@ CI STARTUP FOLLOW-UP — 2026-10-20
 [x] Local macOS validation: 80 tests pass on Python 3.12 and 80 on Python 3.14,
     each including real temporary Nginx. Ruff lint/format checks pass. An isolated
     intentional failure confirms bounded diagnostics without credential files.
-[ ] Rerun the full remote OS/Python matrix after applying these changes. The exact
-    hosted-runner failure cause is not confirmed by the original summary alone.
+[x] Remote rerun: all Linux/macOS jobs pass on Python 3.10/3.12/3.14. All Windows
+    versions report Node rollback and bot log failures, tracked in the next follow-up.
+
+WINDOWS LOGGING AND NODE DEPENDENCY FOLLOW-UP — 2026-10-20
+[x] Reproduce split print/UTF-8 corruption with a deterministic failing regression.
+[x] Decode child output incrementally and assemble complete lines across pipe reads.
+    Normalize CRLF, flush an incomplete tail at EOF, and bound long line segments
+    to 8192 characters so newline-free output cannot grow buffering indefinitely.
+[x] Use real versioned local npm tarballs in the rollback fixture; assert installed
+    dependencies are physical directories across release moves and both the new
+    and restored original dependency versions are correct without reinstalling.
+[x] Document portable Windows Node packages and directory/workspace link limits.
+[x] Local macOS validation: 82 tests pass on Python 3.12 and 82 on Python 3.14,
+    each with real temporary Nginx and real npm tarball deployment/rollback.
+    Ruff lint/format checks pass.
+[ ] Rerun the updated Windows/macOS/Linux CI matrix after pushing these changes.
 
 # ORIGINAL V1 PLAN — HISTORICAL REFERENCE
 

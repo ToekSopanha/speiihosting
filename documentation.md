@@ -38,7 +38,19 @@ GitHub Actions reported readiness timeouts in the health rollback, ongoing healt
 
 Local follow-up validation: **80 tests passed on Python 3.12 and 80 on Python 3.14**, each with real temporary Nginx on macOS. Ruff lint and formatting passed. An intentional isolated failure also confirmed that runtime/log tails appear in the report, earlier log content is bounded, and credential files are excluded.
 
-Remote validation of these changes still requires rerunning the complete Windows/macOS/Linux and Python 3.10/3.12/3.14 CI matrix. A passing local run does not establish that the hosted-runner failures are resolved.
+The [subsequent remote run](https://github.com/ToekSopanha/speiihosting/actions/runs/39372732061) passed every Linux/macOS job on Python 3.10/3.12/3.14. All three Windows jobs reported the Node rollback and bot log failures addressed in the next follow-up.
+
+### Windows logging and local Node dependencies (2026-10-20)
+
+The log reader previously added a newline after every pipe read. A single print can span several reads, so `v1 env-loaded` could become several separate log lines. UTF-8 characters split across reads could also be corrupted. The reader now decodes incrementally and assembles complete lines, normalizes CRLF, flushes an incomplete tail at EOF, and emits long lines in segments of at most 8192 characters to keep buffering bounded. A deterministic fragmented-output regression failed before this fix and passes afterward.
+
+The Node rollback fixture now installs versioned local .tgz packages and verifies that the installed dependency is a physical directory after hosting, deployment and rollback. It checks both the deployed dependency version and the restored original version without reinstalling. This keeps the test focused on a complete runnable dependency snapshot. npm permits local directory dependencies to be linked, and Windows junction targets are absolute, making candidate-directory references unsafe after a release rename. See [npm local package installation](https://docs.npmjs.com/cli/v10/commands/npm-install/) and [Node filesystem link behavior](https://nodejs.org/docs/latest-v22.x/api/fs.html#fssymlinktarget-path-type-callback).
+
+For Windows applications with local dependencies, use packaged .tgz files inside the source project or registry packages, and regenerate/commit the corresponding lockfile. A dependency can be referenced as `"local-dep": "file:./vendor/local-dep-1.0.0.tgz"`. Directory/workspace links tied to a candidate/live path are not portable release snapshots. SpeiiHosting does not automatically rewrite those links.
+
+Local validation: **82 tests passed on Python 3.12 and 82 on Python 3.14**, each including real temporary Nginx on macOS. Ruff lint and formatting passed. The real npm deployment/rollback fixture also passes with the new package archives and physical-directory assertions.
+
+The updated full remote matrix, especially Windows Python 3.10/3.12/3.14, still needs a rerun after these changes are pushed.
 
 ## Contract and trust model
 
@@ -162,7 +174,7 @@ Fixed-port apps are stopped before the directory switch and restarted afterward.
 
 ## Logs and daily maintenance
 
-Use logs name -n 500, logs name -f, logs name --build, logs nginx -f and logs speii-daemon. Builds use their own rotating file so concurrent deployment output cannot compete with the live process's rotation handler. `logs size` reports exact file sizes/line counts. Clear with logs clear name or logs clear --all; truncation preserves existing file descriptors. Application handlers rotate at 5,000,000 bytes with one backup. Output is consumed in bounded chunks. Nginx logs are periodically rotated, so brief overshoot is possible.
+Use logs name -n 500, logs name -f, logs name --build, logs nginx -f and logs speii-daemon. Builds use their own rotating file so concurrent deployment output cannot compete with the live process's rotation handler. `logs size` reports exact file sizes/line counts. Clear with logs clear name or logs clear --all; truncation preserves existing file descriptors. Application handlers rotate at 5,000,000 bytes with one backup. Output is consumed in bounded reads, decoded incrementally and assembled into lines; oversized lines are emitted in segments and incomplete tails flush at EOF. Nginx logs are periodically rotated, so brief overshoot is possible.
 
 Configuration commands support domain, nginx_port, autostart, sleep_prevent, metrics_interval, release_budget_mb and credential_store. Sleep prevention is off by default. Linux writes a dedicated logind drop-in effective after reload/reboot; Windows saves/restores the AC lid policy; macOS runs caffeinate, with hardware-specific closed-lid limits. No laptop hardware/thermal or network availability guarantee is implied.
 

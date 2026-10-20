@@ -178,4 +178,6 @@ CI runs several Python versions across Windows/macOS/Linux, uses actions pinned 
 
 The CI startup follow-up uses concurrent test HTTP servers without reverse DNS, allows more startup time on hosted runners, and prints bounded runtime/service logs when a test fails. HTTP readiness uses the HTTP response directly; timeout messages include the last process and health status. See the [CI startup notes](documentation.md#ci-startup-follow-up-2026-10-20) for validation and remaining remote checks.
 
+The Windows follow-up preserves complete log lines and UTF-8 characters across pipe reads. For local Node dependencies on Windows, use packaged .tgz files inside the source project or registry packages, with the corresponding lockfile, to keep releases independent of directory links. See [Windows logging and local dependencies](documentation.md#windows-logging-and-local-node-dependencies-2026-10-20).
+
 See [documentation.md](documentation.md) for architecture, recovery details and operational limits; [plan.txt](plan.txt) records the revised implementation plan. MIT license.
