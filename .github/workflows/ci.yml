@@ -29,17 +29,24 @@ jobs:
         run: uv lock --check
       - name: Install Python dependencies
         run: uv sync --locked --all-extras
-      - run: uv run --locked ruff check src tests
-      - run: uv run --locked ruff format --check src tests
-      - run: uv run --locked python -m pytest -q
-      - run: uv run --locked python -m build
+      - name: Lint
+        run: uv run --locked ruff check src tests
+      - name: Format check
+        run: uv run --locked ruff format --check src tests
+      - name: Python tests
+        run: uv run --locked python -m pytest -q
+      - name: Build Python wheel
+        run: uv run --locked python -m build
       - name: Build npm launcher
         run: npm run build
       - name: Test npm launcher
         run: node --test tests/npm.test.cjs
         env:
           SPEIIHOSTING_PYTHON: ${{ matrix.os == 'windows-latest' && '.venv/Scripts/python.exe' || '.venv/bin/python' }}
-      - run: npm pack --dry-run
+      - name: Validate npm package contents
+        run: npm pack --dry-run
       - name: Audit locked Python dependencies
+        # requirements-dev.lock is generated with --no-emit-project to exclude
+        # the unhashable editable -e . line that pip-audit --require-hashes rejects.
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: uv run --locked pip-audit --strict --require-hashes -r requirements-dev.lock

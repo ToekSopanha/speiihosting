@@ -21,6 +21,14 @@ def atomic_write(path: Path, data: str | bytes, *, durable: bool = True) -> None
             handle.flush()
             if durable:
                 os.fsync(handle.fileno())
+        # On Windows, tempfile.mkstemp() creates the file with a restrictive
+        # ACL (owner-only).  os.replace() preserves that ACL on the destination,
+        # so any other process (or the same process running as a different thread
+        # owner) gets EACCES when it later tries to read the file.
+        # chmod to 0o644 before the rename so the replaced file is world-readable
+        # within the already-restricted parent directory (0o700 / Windows equiv).
+        if os.name == "nt":
+            os.chmod(name, 0o644)
         os.replace(name, path)
         if durable and os.name != "nt":
             descriptor = os.open(path.parent, os.O_RDONLY)
