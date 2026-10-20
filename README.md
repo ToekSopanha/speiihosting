@@ -1,5 +1,7 @@
 <div align="center">
 
+<!-- version:0.3.0 -->
+
 # 🚀 SpeiiHosting
 
 **Transform Any Computer Into a Professional Web Server**
@@ -305,6 +307,26 @@ speiihos host-dynamic --run "deno run --allow-net server.ts"
 ## 🤝 Contributing
 
 SpeiiHosting is currently in active development (v0.2.0). Contributions, bug reports, and feature requests are welcome!
+
+### Version Management
+
+This project uses centralized version management. To update the version:
+
+```bash
+# Simple: just update the VERSION file
+echo "0.3.0" > VERSION
+python3 scripts/update_version.py
+
+# Or use Make
+make release VERSION=0.3.0
+
+# Check consistency
+make version-check
+```
+
+See [VERSION_MANAGEMENT.md](VERSION_MANAGEMENT.md) for complete details.
+
+### Development Setup
 
 ```sh
 # Development setup
