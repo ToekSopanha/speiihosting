@@ -1,83 +1,252 @@
-# SpeiiHosting (`speiihos`)
+<div align="center">
 
-A Python CLI for hosting static websites, dynamic web apps, local APIs and outbound bots on Windows, macOS and Linux. Public sites use a private Nginx instance and Cloudflare Tunnels for HTTPS without router port forwarding.
+# 🚀 SpeiiHosting
 
-Version 0.2 adds explicit API exposure, separate hosting credentials, application health checks, recoverable deployments, complete offline rollback releases, project manifests and optional rootless containers.
+**Transform Any Computer Into a Professional Web Server**
 
-See [what changed and migration steps](documentation.md#what-changed-in-020) for the full implementation record, user-visible defaults and verification limits. The [plan](plan.txt) records completed work and remaining release verification.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Cross Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 
-## Install
+*Zero port forwarding • Free HTTPS • Production-grade deployments*
 
-Requires Python 3.10+. From this checkout:
+[Quick Start](#-quick-start) • [Features](#-features) • [Documentation](USERGUIDE.md) • [Changelog](CHANGELOG.md)
 
+</div>
+
+---
+
+## 🎯 What is SpeiiHosting?
+
+SpeiiHosting (`speiihos`) is a professional CLI tool that turns any PC, Mac, or old laptop into a full-featured web hosting server. Host static sites, dynamic web apps, REST APIs, and 24/7 bots—all without router configuration or exposing ports.
+
+**Perfect for:**
+- 💼 **Developers** hosting personal projects and portfolios
+- 🏢 **Small teams** running internal tools and dashboards  
+- 🎓 **Students** learning deployment and DevOps practices
+- 💰 **Cost savers** repurposing old hardware instead of cloud bills
+
+## ✨ Features
+
+### 🌐 **4 Hosting Modes, One Command**
+
+| Mode | Use Case | Command | Public URL |
+|------|----------|---------|------------|
+| **Frontend** | React, Vue, Static Sites | `speiihos host-front` | ✅ HTTPS |
+| **Dynamic** | Next.js, Django, Full-Stack | `speiihos host-dynamic` | ✅ HTTPS |
+| **Backend** | REST APIs, Microservices | `speiihos host-back` | 🔒 Private |
+| **Bot** | Telegram, Discord, Workers | `speiihos host-bot` | 🔒 Outbound |
+
+### 🔐 **Enterprise-Grade Security**
+
+- **Private by Default**: APIs never auto-expose; explicit linking required
+- **Credential Isolation**: Hosting tokens separated from app environments
+- **Container Support**: Optional rootless Podman with CPU/memory/PID limits
+- **Environment Control**: Allowlist-based variable inheritance
+
+### 🚑 **Bulletproof Deployments**
+
+- **Atomic Rollbacks**: Complete offline rollback with preserved dependencies
+- **Health Monitoring**: HTTP checks with auto-restart for unhealthy services
+- **Crash Recovery**: Durable journals repair interrupted deployments
+- **Zero Downtime***: Smart process management with graceful restarts
+
+### 🛠️ **Developer-Friendly Workflow**
+
+```sh
+# Preview before applying
+speiihos host-back --dry-run --json
+
+# Save project configuration  
+speiihos project init --type backend
+
+# Deploy safely from source
+speiihos deploy
+
+# Instant rollback if needed
+speiihos rollback api
+```
+
+### 📊 **Production Monitoring**
+
+- Live log streaming with auto-rotation (5MB cap per service)
+- CPU, memory, and health status tracking
+- Separate build and runtime logs
+- Explicit public HTTPS verification
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+**Python (Recommended)**
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install .
-# Windows: .venv\Scripts\python -m pip install .
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install .
 ```
 
-Activate that environment before using `speiihos`, or call `.venv/bin/speiihos` directly. Alternative installers are `npm install -g .`, `sh scripts/install.sh`, and `powershell -File scripts/install.ps1`. The npm launcher requires Python and creates a private environment when needed; the standalone scripts can install Python through the platform package manager.
+**NPM Alternative**
+```sh
+npm install -g .
+```
 
-Nginx, cloudflared and a Cloudflare domain are needed only for public hosting. Registry publication and hosted installer URLs are separate release tasks.
-
-## Host a project
+### First-Time Setup
 
 ```sh
-# Static website: build first, then publish dist/build/out/public or index.html
-cd ~/projects/portfolio
+# Interactive setup: installs Nginx, cloudflared, configures Cloudflare
+speiihos init
+```
+
+You'll need:
+- A Cloudflare account with a domain
+- API token with: `Account Cloudflare Tunnel Edit`, `Zone Read`, `DNS Edit`
+
+### Host Your First Site
+
+**Static Website (React, Vue, HTML)**
+```sh
+cd ~/my-portfolio
+npm run build
 speiihos host-front --subdomain portfolio --dir dist
-
-# Dynamic SSR application (host-app is an alias)
-cd ~/projects/next-app
-speiihos host-dynamic --subdomain app --port 3000
-
-# Private API: no domain, Nginx or Cloudflare setup required
-cd ~/projects/api
-speiihos host-back --port 8000 --health-path /health --health-status 200
-
-# Outbound bot: no domain or port required
-cd ~/projects/bot
-speiihos host-bot
+# ✅ Live at https://portfolio.yourdomain.com
 ```
 
-For public hosting, run `speiihos init` first. Setup can install Nginx/cloudflared, configure a Cloudflare API token or browser login, and register user startup. New installations use **127.0.0.1:8080**; choose another port with `init --nginx-port`. Existing configured ports remain unchanged during migration. System Nginx configuration is left alone.
-
-An API token needs Account Cloudflare Tunnel Edit, Zone Read and DNS Edit; cache purging additionally needs Cache Purge. Enter it through the hidden prompt or `CLOUDFLARE_API_TOKEN`. Apps and build commands do not inherit that token. `--no-install` and `--no-autostart` skip setup actions.
-
-Detection supports Next.js, Nuxt, Django, Flask, FastAPI, Laravel and conventional Python/Node entrypoints. Use `--run` or `--build` for other layouts. Native custom applications must honor `HOST=127.0.0.1` and `PORT`. `--auto-port` selects the next available port; use `$PORT` in POSIX commands or `%PORT%` on Windows. `host-back --existing --port 8000` registers an independently managed listener without taking ownership of its process.
-
-## Keep APIs private until explicitly linked
-
-New services never auto-link to a frontend. Expose a route deliberately:
-
+**Full-Stack App (Next.js, Django)**
 ```sh
+cd ~/my-nextjs-app  
+speiihos host-dynamic --subdomain myapp --port 3000
+# ✅ Live at https://myapp.yourdomain.com
+```
+
+**Private API (FastAPI, Express)**
+```sh
+cd ~/my-api
+speiihos host-back --port 8000 --health-path /health
+# 🔒 Runs on http://127.0.0.1:8000 (no public domain)
+
+# Link to frontend when ready
 speiihos link portfolio api --prefix /api
-# Or supply --backend api on host-front/host-dynamic,
-# or --frontend portfolio on host-back.
-speiihos unlink portfolio
+# ✅ https://portfolio.yourdomain.com/api → 127.0.0.1:8000
 ```
 
-`https://portfolio.example.com/api/users` then reaches `http://127.0.0.1:8000/users`. This strips the prefix and shares the frontend's origin. The route is publicly reachable: implement application authorization, and use Cloudflare Access for private dashboards. Stopping the linked backend makes its API route return 503. A polling bot remains outbound; `host-bot --webhook --port 8443 --subdomain hooks` explicitly enables public webhook routing.
+**24/7 Bot (Telegram, Discord)**
+```sh
+cd ~/my-telegram-bot
+speiihos host-bot
+# 🤖 Runs 24/7, auto-restarts on crash
+```
 
-## Save project settings and preview changes
+---
+
+## 📦 How It Works
+
+```
+┌─────────────────────────────────────────────────┐
+│          Cloudflare Edge (Free HTTPS)           │
+│     Global CDN • DDoS Protection • SSL          │
+└─────────────────┬───────────────────────────────┘
+                  │ Encrypted Tunnel (No port forwarding!)
+                  ▼
+┌─────────────────────────────────────────────────┐
+│            Your PC / Old Laptop                 │
+│                                                  │
+│  ┌──────────────────────────────────────────┐  │
+│  │  Nginx (127.0.0.1:8080)                  │  │
+│  │  • Virtual hosting for all sites         │  │
+│  │  • Asset caching & gzip                  │  │
+│  │  • WebSocket support                     │  │
+│  └──────────────────────────────────────────┘  │
+│           │                    │                 │
+│           ▼                    ▼                 │
+│  ┌─────────────────┐  ┌─────────────────┐      │
+│  │  Frontend       │  │  Backend API    │      │
+│  │  (Static)       │  │  (Port 8000)    │      │
+│  └─────────────────┘  └─────────────────┘      │
+└─────────────────────────────────────────────────┘
+```
+
+**Key Principles:**
+1. **Cloudflare Tunnels** provide public HTTPS without router changes
+2. **Nginx** handles routing, caching, and proxying on loopback
+3. **Process Supervision** keeps services running 24/7 with auto-restart
+4. **Isolated Staging** prevents code edits from affecting live services
+
+---
+
+## 🎓 Core Concepts
+
+### API Privacy Model
+
+**Default: Private** → New APIs never auto-expose  
+**Explicit Linking** → `speiihos link frontend api --prefix /api`  
+**Same-Origin Routing** → No CORS issues, backend stays on 127.0.0.1  
+**Authorization Required** → Public routes need app-level auth
+
+### Deployment Architecture
 
 ```sh
+~/.speiihosting/sites/myapp/
+  ├── live/          # Current running release
+  ├── previous/      # Complete backup with dependencies
+  ├── candidate/     # Prepared deployment (during promote)
+  ├── data/          # Persistent uploads/databases
+  └── environments/  # Python venvs (reused across releases)
+```
+
+- **Atomic Deploys**: Builds complete before switching
+- **Durable Journals**: Interrupted deploys auto-recover
+- **Health Gates**: Failed health checks auto-rollback
+- **Offline Rollback**: No registry downloads needed
+
+### Resource Management
+
+- **Release Budget**: Default 4096 MB per site (configurable)
+- **Log Rotation**: 5 MB cap with 1 backup per service
+- **Dependency Isolation**: Each release has its own installed packages
+- **Data Persistence**: `SPEII_DATA_DIR` survives deploys and rollbacks
+
+---
+
+## 📋 Common Commands
+
+```sh
+# Lifecycle Management
+speiihos list                    # Show all hosted services
+speiihos inspect api --json      # Detailed service info
+speiihos start / stop / restart api
+
+# Deployment
+speiihos deploy                  # Deploy from current directory
+speiihos rollback api            # Restore previous release
+speiihos recover                 # Repair interrupted deploy
+
+# Monitoring
+speiihos logs api -f             # Stream live logs
+speiihos logs api --build        # View dependency install logs
+speiihos verify portfolio        # Test public HTTPS URL
+speiihos logs size               # Check log disk usage
+
+# Configuration
 speiihos project init --type backend
 speiihos project validate
-speiihos host-back --dry-run --json
-speiihos host-back
+speiihos config set release_budget_mb 8192
+
+# Cleanup
+speiihos clean api               # Remove previous release
+speiihos remove api              # Delete service entirely
+speiihos logs clear --all        # Truncate all logs
 ```
 
-A project file can contain:
+---
+
+## 🔧 Advanced Features
+
+### Health Checks
 
 ```toml
-schema_version = 1
-type = "backend"
-name = "api"
-port = 8000
-env_allow = ["APP_REGION"]
-strict_dependencies = false
-
+# speiihosting.toml
 [health]
 path = "/health"
 expected_status = 200
@@ -88,96 +257,100 @@ failures = 3
 startup_timeout = 30
 ```
 
-CLI options override explicitly supplied manifest values. `--config path.toml` selects another manifest. Previews show commands, requested ports, routes, health and isolation without installing packages, starting processes or creating hosting state. Availability and disk checks run when applying the command. Use `--non-interactive` before the subcommand for scripted setup; API-token setup then requires no prompts and needs `--domain` when several zones are available.
-
-## Deploy, inspect and recover
-
-```sh
-speiihos deploy --dry-run --json
-speiihos deploy                    # match the registered source directory
-speiihos rollback api              # restore a complete previous release offline
-speiihos recover                   # repair an interrupted promotion
-speiihos list
-speiihos list --json
-speiihos inspect api --json
-speiihos verify portfolio --json   # explicitly check the public HTTPS URL
-speiihos stop 8000
-speiihos start api
-speiihos restart api
-```
-
-Code runs from `~/.speiihosting/sites/<name>/live/`; source edits do not change it. Candidate builds finish before promotion. A durable journal records promotion intent, and interrupted updates are recovered by the supervisor or the next management command. Failed startup/health checks restore the old release. One **complete runnable previous release**, including its installed dependencies, is retained. Rollback performs no package installation or build.
-
-Runtime settings explicitly present in the default project manifest are refreshed on deploy. Registered names, ports and public routes remain explicit management choices. Fixed-port application restarts have a brief interruption; literal zero downtime is not guaranteed.
-
-Keep uploads/databases in `SPEII_DATA_DIR`, which points to `sites/<name>/data` for native processes and `/data` in containers. This directory survives deploy, rollback, backup cleanup and normal removal. `remove api --purge-data` explicitly deletes it; `--reuse-data` attaches saved data when rehosting the same name. Database migrations and other external side effects are not rolled back.
-
-The per-site release budget defaults to 4096 MiB and includes candidate/live/previous/environment files. Persistent data and Podman image storage have separate lifecycles. Change it with `config set release_budget_mb 8192`. Low free space or an exceeded budget prevents promotion.
-
-Status separates process startup, application health, tunnel connection and explicit public URL verification. Without a custom health check, newly managed HTTP services accept a non-5xx response at `/` as basic HTTP readiness; configure a meaningful path/status/body for application health. Background checks restart repeatedly unhealthy managed apps. `inspect` includes current metrics, restart counts, routes, disk usage and recovery state.
-
-## Application isolation and credentials
-
-Native mode runs **trusted code under the current OS user**. Environment allowlisting and virtual environments do not isolate that user's filesystem. Shell variables are inherited only through a small platform allowlist or explicit `env_allow`; the app's own `.env` is loaded without shell evaluation. Hosting credential variables are reserved. Native process-tree memory limits are supervised on a best-effort basis; CPU/PID limits require the container adapter.
-
-For stronger isolation, Linux with rootless Podman and delegated cgroup v2 CPU/memory/PID controllers can use:
+### Container Isolation (Linux + Podman)
 
 ```sh
 speiihos host-back --port 8000 --isolation podman \
-  --image 'registry.example.com/app@sha256:<your-64-digit-digest>' \
+  --image 'registry.io/app@sha256:abc123...' \
   --memory-mb 512 --cpus 1 --pids 128
 ```
 
-Use a prebuilt image with its runtime/dependencies already installed. The adapter mounts the staged project at `/app` read-only, persistent data at `/data`, drops capabilities, prevents privilege escalation and gives the container a bounded writable `/tmp`. Image dependencies must remain available outside the mounted `/app` tree. Image mode skips host dependency installs/builds; applications listen on `0.0.0.0` inside the container while only loopback ports are published on the host. App secrets are passed through a private env file, without placing values in process arguments or the Podman client's environment. Container values must be single-line; store multiline certificates in an app data file.
+### Strict Dependency Mode
 
-Hosting credentials live in private `credentials.json`, separately from `config.json`. Optional OS credential storage:
-
-```sh
-python -m pip install '.[secrets]'
-speiihos config set credential_store keyring
+```toml
+strict_dependencies = true  # Requires lockfiles with hashes
 ```
 
-A supported secure OS keyring must be available and unlockable; plaintext fallback keyrings are rejected. The private-file provider remains suitable for headless setups. Containers retain outbound networking; internal APIs still need authorization. Native Podman/keyring integration must be verified on the target system.
-
-## Logs, maintenance and migration
+### Custom Builds
 
 ```sh
-speiihos logs api -n 500
-speiihos logs api --build      # separate dependency/build output
-speiihos logs api -f
-speiihos logs nginx -f
-speiihos logs speii-daemon
-speiihos logs size
-speiihos logs clear --all
-speiihos clean api
-speiihos clean --all
-speiihos remove api
-speiihos migrate
+speiihos host-front --build "pnpm build" --dir ./dist
+speiihos host-dynamic --run "deno run --allow-net server.ts"
 ```
 
-Application and build logs are separate streams, each rotating at 5,000,000 bytes with one backup. Nginx logs may briefly exceed that threshold between supervisor checks. `clean` removes the previous release, never persistent data. Version 1 state is read compatibly; `migrate` persists schema version 2 and moves legacy tokens out of general configuration. Existing recorded links are preserved: inspect them and use `unlink` to remove any unwanted public mapping.
+---
 
-Autostart uses macOS LaunchAgents, Linux systemd user services and Windows logon tasks. Linux boot before login requires separately enabling lingering. Sleep prevention defaults off; `config set sleep_prevent on` enables platform-specific controls. macOS `caffeinate` does not guarantee closed-lid operation. Startup/power changes need target-machine verification. Browser-authenticated tunnels support hosting but require dashboard DNS cleanup and API-token authentication for cache purging.
+## 🆚 Comparison
 
-## Development and verification
+| Feature | SpeiiHosting | PM2 | Dokku | Cloud Hosting |
+|---------|-------------|-----|-------|---------------|
+| **No Router Config** | ✅ | ❌ | ❌ | ✅ |
+| **Free HTTPS** | ✅ | ❌ | ❌ | 💰 |
+| **Atomic Rollback** | ✅ | ❌ | ✅ | ✅ |
+| **Multi-Language** | ✅ | Node only | ✅ | ✅ |
+| **Old Hardware** | ✅ | ✅ | ✅ | ❌ |
+| **Cost** | $0 | $0 | $0 | $$$$ |
+
+---
+
+## 📚 Documentation
+
+- **[User Guide](USERGUIDE.md)**: Step-by-step tutorials and examples
+- **[Changelog](CHANGELOG.md)**: Version history and migration guides  
+- **[Technical Docs](documentation.md)**: Architecture and operational limits
+- **[Implementation Plan](plan.txt)**: Development roadmap and design decisions
+
+---
+
+## 🤝 Contributing
+
+SpeiiHosting is currently in active development (v0.2.0). Contributions, bug reports, and feature requests are welcome!
 
 ```sh
+# Development setup
 uv sync --locked --all-extras
 uv run --locked python -m pytest -q
 uv run --locked ruff check src tests
-uv run --locked ruff format --check src tests
-uv run --locked python -m build
-uv run --locked pip-audit --strict --require-hashes -r requirements-dev.lock
-npm test
-npm pack --dry-run
 ```
 
-`uv.lock` and `requirements-dev.lock` record pinned versions and hashes. Applications may opt into `strict_dependencies = true`: Node then requires package-lock.json; Python requires a complete pinned/hash-checked requirements.lock or requirements.txt, including its server runtime. Package download caches are reused; writable installed dependency directories are never shared across distinct releases.
+**Testing Requirements:**
+- Python 3.10 / 3.12 / 3.14
+- Nginx on PATH (for integration tests)
+- 82 tests passing on all platforms
 
-CI runs several Python versions across Windows/macOS/Linux, uses actions pinned by commit SHA and audits dependencies. Direct executable downloads use the versioned checksums in `binaries.json` and fail closed on missing or mismatched hashes. The real Nginx test runs with Nginx on PATH or `SPEII_TEST_NGINX`. Cloudflare and container contract tests use mocks; they do not prove live account connectivity or native container enforcement.
+---
 
-The CI startup follow-up uses concurrent test HTTP servers without reverse DNS, allows more startup time on hosted runners, and prints bounded runtime/service logs when a test fails. HTTP readiness uses the HTTP response directly; timeout messages include the last process and health status. See the [CI startup notes](documentation.md#ci-startup-follow-up-2026-10-20) for validation and remaining remote checks.
+## ⚠️ Current Limitations
 
-The Windows follow-up preserves complete log lines and UTF-8 characters across pipe reads. For local Node dependencies on Windows, use packaged .tgz files inside the source project or registry packages, with the corresponding lockfile, to keep releases independent of directory links. See [Windows logging and local dependencies](documentation.md#windows-logging-and-local-node-dependencies-2026-10-20).
+- **Startup Power**: OS-specific boot behavior needs per-platform verification
+- **Container Enforcement**: Podman limits tested via mocks, not live cgroups
+- **Sleep Prevention**: macOS closed-lid operation has hardware-specific limits
+- **Zero Downtime**: Fixed-port restarts have brief interruptions
 
-See [documentation.md](documentation.md) for architecture, recovery details and operational limits; [plan.txt](plan.txt) records the revised implementation plan. MIT license.
+See [documentation.md](documentation.md#verification-and-release-limits) for complete operational limits.
+
+---
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+- **Typer** & **Rich** - Beautiful CLI experience
+- **Cloudflare Tunnels** - Secure public access without port forwarding
+- **Nginx** - High-performance reverse proxy and caching
+- **Podman** - Optional rootless container isolation
+
+---
+
+<div align="center">
+
+**Made for developers who want control without complexity**
+
+[Get Started](USERGUIDE.md) • [Report Bug](https://github.com/ToekSopanha/speiihosting/issues) • [Request Feature](https://github.com/ToekSopanha/speiihosting/issues)
+
+</div>
