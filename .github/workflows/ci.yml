@@ -25,12 +25,18 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
-      - run: uv sync --locked --all-extras
+      - name: Verify uv.lock is up to date
+        run: uv lock --check
+      - name: Install Python dependencies
+        run: uv sync --locked --all-extras
       - run: uv run --locked ruff check src tests
       - run: uv run --locked ruff format --check src tests
       - run: uv run --locked python -m pytest -q
       - run: uv run --locked python -m build
-      - run: npm test
+      - name: Build npm launcher
+        run: npm run build
+      - name: Test npm launcher
+        run: node --test tests/npm.test.cjs
         env:
           SPEIIHOSTING_PYTHON: ${{ matrix.os == 'windows-latest' && '.venv/Scripts/python.exe' || '.venv/bin/python' }}
       - run: npm pack --dry-run

@@ -1,4 +1,4 @@
-.PHONY: version-check version-update release help
+.PHONY: version-check version-update release help build npm-build full-build clean test lint format
 
 # Get current version from VERSION file
 VERSION := $(shell cat VERSION 2>/dev/null || echo "unknown")
@@ -11,10 +11,14 @@ help:
 	@echo "Available commands:"
 	@echo "  make version-check       Check version consistency across files"
 	@echo "  make version-update      Update version across all files"
+	@echo "  make build               Build Python wheel + sdist  →  dist/"
+	@echo "  make npm-build           Build npm launcher          →  dist/speiihos.cjs"
+	@echo "  make full-build          Build both Python and npm artefacts"
 	@echo "  make release VERSION=X.Y.Z  Release new version"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make version-check"
+	@echo "  make full-build"
 	@echo "  make release VERSION=0.3.0"
 
 version-check:
@@ -43,6 +47,7 @@ release:
 
 test:
 	@uv run --locked python -m pytest -q
+	@npm test
 
 lint:
 	@uv run --locked ruff check src tests
@@ -50,8 +55,16 @@ lint:
 format:
 	@uv run --locked ruff format src tests
 
+# Build Python wheel + sdist into dist/
 build:
 	@uv run --locked python -m build
+
+# Build npm launcher into dist/speiihos.cjs
+npm-build:
+	@node scripts/build.cjs
+
+# Build everything: Python artefacts + npm launcher
+full-build: build npm-build
 
 clean:
 	@rm -rf dist/ build/ *.egg-info
