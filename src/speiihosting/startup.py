@@ -81,8 +81,13 @@ def render(store: Store, system: str) -> bytes:
     if os.environ.get("USERDOMAIN"):
         user = os.environ["USERDOMAIN"] + "\\" + user
     user = escape(user)
-    return (
-        f'<?xml version="1.0" encoding="UTF-8"?>'
+    # Write as UTF-16 LE with BOM: schtasks /XML reads the file with
+    # CreateFile + IXmlReader which honours the BOM and therefore works
+    # regardless of the system ANSI code-page (the root cause of the
+    # "unable to switch the encoding" error on non-English Windows).
+    # The XML declaration must match the chosen encoding.
+    xml = (
+        '<?xml version="1.0" encoding="UTF-16"?>'
         '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
         f"<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger></Triggers>"
         f'<Principals><Principal id="Author"><UserId>{user}</UserId>'
@@ -97,7 +102,8 @@ def render(store: Store, system: str) -> bytes:
         "<Arguments>-m speiihosting.daemon</Arguments>"
         f"<WorkingDirectory>{escape(str(store.home))}</WorkingDirectory>"
         "</Exec></Actions></Task>"
-    ).encode()
+    )
+    return xml.encode("utf-16")
 
 
 def checked(command: list[str]) -> None:
@@ -136,16 +142,18 @@ def configure(store: Store, enabled: bool) -> None:
                 + repr(str(store.home))
                 + "\nrunpy.run_module('speiihosting.daemon', run_name='__main__')\n",
             )
-            data = (
-                render(store, system)
-                .decode()
-                .replace(
-                    "<Arguments>-m speiihosting.daemon</Arguments>",
-                    "<Arguments>" + escape(subprocess.list2cmdline([str(runner)])) + "</Arguments>",
-                )
+            # render() returns UTF-16 bytes (with BOM). Decode with the same
+            # codec, patch the arguments, then re-encode as UTF-16 so the BOM
+            # and declared encoding stay consistent.  schtasks /XML uses
+            # IXmlReader which honours the UTF-16 BOM on every Windows locale,
+            # avoiding the "unable to switch the encoding" Task Scheduler error.
+            xml_text = render(store, system).decode("utf-16")
+            xml_text = xml_text.replace(
+                "<Arguments>-m speiihosting.daemon</Arguments>",
+                "<Arguments>" + escape(subprocess.list2cmdline([str(runner)])) + "</Arguments>",
             )
             task = store.home / "startup.xml"
-            atomic_write(task, data)
+            atomic_write(task, xml_text.encode("utf-16"))
             checked(["schtasks", "/Create", "/TN", LABEL, "/XML", str(task), "/F"])
         else:
             raise SpeiiError("Autostart is not supported on this OS.")

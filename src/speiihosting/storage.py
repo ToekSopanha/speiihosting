@@ -17,7 +17,7 @@ def atomic_write(path: Path, data: str | bytes, *, durable: bool = True) -> None
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as handle:
-            handle.write(data.encode() if isinstance(data, str) else data)
+            handle.write(data.encode("utf-8") if isinstance(data, str) else data)
             handle.flush()
             if durable:
                 os.fsync(handle.fileno())

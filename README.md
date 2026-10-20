@@ -1,6 +1,6 @@
 <div align="center">
 
-<!-- version:0.3.0 -->
+<!-- version:0.3.1 -->
 
 # 🚀 SpeiiHosting
 
@@ -214,10 +214,15 @@ speiihos host-bot
 ## 📋 Common Commands
 
 ```sh
+# System Control
+speiihos service start           # Start supervisor + all services
+speiihos service stop            # Stop everything gracefully
+speiihos list                    # Show all hosted services status
+
 # Lifecycle Management
-speiihos list                    # Show all hosted services
 speiihos inspect api --json      # Detailed service info
 speiihos start / stop / restart api
+speiihos config set autostart on # Auto-start on boot (default)
 
 # Deployment
 speiihos deploy                  # Deploy from current directory

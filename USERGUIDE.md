@@ -2,7 +2,7 @@
 
 **Complete Step-by-Step Tutorial for Self-Hosting**
 
-Version 0.3.0 • Last Updated: 2026-10-20
+Version 0.3.1 • Last Updated: 2026-10-20
 
 ---
 
@@ -10,14 +10,15 @@ Version 0.3.0 • Last Updated: 2026-10-20
 
 1. [Getting Started](#1-getting-started)
 2. [Initial Setup](#2-initial-setup)
-3. [Hosting Static Websites](#3-hosting-static-websites)
-4. [Hosting Dynamic Web Apps](#4-hosting-dynamic-web-apps)
-5. [Hosting Private APIs](#5-hosting-private-apis)
-6. [Hosting 24/7 Bots](#6-hosting-247-bots)
-7. [Deployment & Updates](#7-deployment--updates)
-8. [Monitoring & Logs](#8-monitoring--logs)
-9. [Advanced Configuration](#9-advanced-configuration)
-10. [Troubleshooting](#10-troubleshooting)
+3. [Starting and Stopping SpeiiHosting](#3-starting-and-stopping-speiihosting)
+4. [Hosting Static Websites](#4-hosting-static-websites)
+5. [Hosting Dynamic Web Apps](#5-hosting-dynamic-web-apps)
+6. [Hosting Private APIs](#6-hosting-private-apis)
+7. [Hosting 24/7 Bots](#7-hosting-247-bots)
+8. [Deployment & Updates](#8-deployment--updates)
+9. [Monitoring & Logs](#9-monitoring--logs)
+10. [Advanced Configuration](#10-advanced-configuration)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -163,7 +164,301 @@ speiihos list
 
 ---
 
-## 3. Hosting Static Websites
+## 3. Starting and Stopping SpeiiHosting
+
+### Overview
+
+SpeiiHosting runs as a background supervisor that manages all your hosted services. You can start/stop the entire system or individual services.
+
+### Commands
+
+#### Start the Supervisor and All Services
+
+```bash
+# Start the main supervisor daemon
+speiihos service start
+```
+
+**What happens:**
+- ✅ Supervisor daemon starts in background
+- ✅ All previously running services automatically restart
+- ✅ Nginx and Cloudflare Tunnel reconnect
+- ✅ Your sites become accessible again
+
+**Output:**
+```
+Supervisor started; previously active services are being restored.
+```
+
+#### Stop Everything
+
+```bash
+# Stop supervisor and all hosted services
+speiihos service stop
+```
+
+**What happens:**
+- 🛑 All hosted apps stop
+- 🛑 Nginx stops
+- 🛑 Cloudflare Tunnel disconnects
+- 🛑 Supervisor daemon stops
+- ✅ Your sites are no longer accessible (graceful shutdown)
+
+**Output:**
+```
+Supervisor and managed processes stopped.
+```
+
+#### Check Status
+
+```bash
+# See what's running
+speiihos list
+```
+
+**Example output when running:**
+```
+Name       Type       Target              Status   Health   Restarts  CPU    RAM
+portfolio  frontend   /path/to/live       active   healthy  0         0.2%   45.3 MB
+api        backend    127.0.0.1:8000      active   healthy  1         1.5%   128.7 MB
+bot        bot        outbound            active   healthy  0         0.8%   89.2 MB
+```
+
+**Example output when stopped:**
+```
+Name       Type       Target              Status    Health    Restarts  CPU   RAM
+portfolio  frontend   /path/to/live       stopped   unknown   0         0%    0 MB
+api        backend    127.0.0.1:8000      stopped   unknown   0         0%    0 MB
+```
+
+### Autostart on Boot (Recommended)
+
+By default, SpeiiHosting is configured to **automatically start when you log in**. This means your hosted sites will come back online automatically after a system reboot.
+
+#### Enable Autostart (enabled by default)
+
+```bash
+# Enable autostart
+speiihos config set autostart on
+```
+
+**What this does:**
+- **macOS:** Creates `~/Library/LaunchAgents/io.speiihosting.daemon.plist`
+- **Linux:** Creates `~/.config/systemd/user/speiihos.service` and enables it
+- **Windows:** Creates a Task Scheduler entry that runs on user login
+
+#### Disable Autostart
+
+```bash
+# Disable autostart
+speiihos config set autostart off
+```
+
+**When to disable:**
+- Development/testing machine where you don't always want services running
+- Laptop to save battery when not needed
+- Temporarily disable without removing services
+
+#### Verify Autostart Status
+
+```bash
+# View current configuration
+speiihos config get autostart
+```
+
+**Output:**
+```
+autostart: on
+```
+
+Or check all settings:
+```bash
+speiihos config list
+```
+
+**Output:**
+```
+domain: example.com
+nginx_port: 8080
+autostart: on
+sleep_prevent: off
+metrics_interval: 2
+```
+
+### Managing Individual Services
+
+You can also control individual services without stopping the entire supervisor:
+
+#### Start One Service
+
+```bash
+# Start by name
+speiihos start portfolio
+
+# Or by port
+speiihos start 8000
+```
+
+#### Stop One Service
+
+```bash
+# Stop by name
+speiihos stop api
+
+# Or by port
+speiihos stop 3000
+```
+
+#### Restart One Service
+
+```bash
+# Restart after code changes
+speiihos restart bot
+
+# Zero-downtime restart
+speiihos reload api
+```
+
+### Typical Workflows
+
+#### Daily Use - Keep Everything Running
+
+```bash
+# Initial setup (once)
+speiihos init
+speiihos host-front --subdomain mysite --dir dist
+
+# That's it! Service auto-starts on boot
+# Your site stays online 24/7
+```
+
+#### Development - Manual Control
+
+```bash
+# Disable autostart for dev machine
+speiihos config set autostart off
+
+# Start when working
+speiihos service start
+
+# Stop when done
+speiihos service stop
+```
+
+#### Server Reboot
+
+```bash
+# With autostart enabled (default):
+# 1. Reboot your computer
+# 2. Wait 30 seconds after login
+# 3. Check status: speiihos list
+# 4. All services should show "active" ✅
+
+# Without autostart:
+# After reboot, manually run:
+speiihos service start
+```
+
+#### Quick Status Check
+
+```bash
+# Check if supervisor is running
+speiihos list
+
+# If you see process stats (CPU/RAM), supervisor is running
+# If all show "stopped", supervisor is off
+
+# Or explicitly check:
+speiihos inspect speii-daemon
+```
+
+### Troubleshooting Start/Stop
+
+#### Issue: "Service won't start"
+
+```bash
+# Check logs
+speiihos logs speii-daemon
+
+# Check system log (autostart issues)
+# macOS:
+tail -f ~/.speiihosting/logs/startup.log
+
+# Linux:
+journalctl --user -u speiihos.service -f
+
+# Windows:
+# Check Task Scheduler logs
+```
+
+#### Issue: "Autostart not working after reboot"
+
+```bash
+# Re-enable autostart
+speiihos config set autostart off
+speiihos config set autostart on
+
+# Verify installation
+# macOS:
+ls ~/Library/LaunchAgents/io.speiihosting.daemon.plist
+
+# Linux:
+systemctl --user status speiihos.service
+
+# Windows:
+schtasks /Query /TN io.speiihosting.daemon
+```
+
+#### Issue: "Supervisor running but services not starting"
+
+```bash
+# Check individual service status
+speiihos inspect myservice
+
+# View service logs
+speiihos logs myservice -n 200
+
+# Try manual start
+speiihos start myservice
+
+# If still failing, check for port conflicts
+lsof -i :8000  # macOS/Linux
+netstat -ano | findstr :8000  # Windows
+```
+
+### Advanced: System Integration
+
+#### Running as System Service (Linux)
+
+For headless servers without desktop login:
+
+```bash
+# Copy user service to system
+sudo cp ~/.config/systemd/user/speiihos.service \
+        /etc/systemd/system/speiihos@.service
+
+# Edit to use your username
+sudo nano /etc/systemd/system/speiihos@.service
+
+# Enable for your user
+sudo systemctl enable speiihos@$USER.service
+sudo systemctl start speiihos@$USER.service
+```
+
+#### Docker/Container Environments
+
+```bash
+# Disable autostart in containers
+speiihos config set autostart off
+
+# Use container orchestration for startup
+# Dockerfile CMD:
+CMD ["python", "-m", "speiihosting.daemon"]
+```
+
+---
+
+## 4. Hosting Static Websites
 
 ### Use Case
 Host React, Vue, Angular, plain HTML/CSS/JS, or any static build output.
@@ -273,7 +568,7 @@ speiihos host-front
 
 ---
 
-## 4. Hosting Dynamic Web Apps
+## 5. Hosting Dynamic Web Apps
 
 ### Use Case
 Server-rendered applications: Next.js, Nuxt, Django, Flask, Laravel, etc.
@@ -436,7 +731,7 @@ speiihos host-dynamic --subdomain nuxtapp --port 3000
 
 ---
 
-## 5. Hosting Private APIs
+## 6. Hosting Private APIs
 
 ### Core Concept
 
@@ -627,7 +922,7 @@ speiihos host-back --port 3001 --health-path /health
 
 ---
 
-## 6. Hosting 24/7 Bots
+## 7. Hosting 24/7 Bots
 
 ### Use Case
 Telegram bots, Discord bots, cron jobs, monitoring scripts.
@@ -798,7 +1093,7 @@ speiihos host-bot --webhook --port 8443 --subdomain mybot
 
 ---
 
-## 7. Deployment & Updates
+## 8. Deployment & Updates
 
 ### Understanding the Deployment Model
 
@@ -1002,7 +1297,7 @@ speiihos inspect myapp
 
 ---
 
-## 8. Monitoring & Logs
+## 9. Monitoring & Logs
 
 ### Viewing Service Status
 
@@ -1201,7 +1496,7 @@ speiihos inspect myapp
 
 ---
 
-## 9. Advanced Configuration
+## 10. Advanced Configuration
 
 ### Project Manifests
 
@@ -1444,7 +1739,7 @@ npm install  # Generates package-lock.json automatically
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### Common Issues
 
