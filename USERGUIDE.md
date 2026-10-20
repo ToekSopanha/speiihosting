@@ -1448,6 +1448,50 @@ npm install  # Generates package-lock.json automatically
 
 ### Common Issues
 
+#### Issue: "Invalid input. Check names, domains, ports..." during setup
+
+**Symptoms:**
+```
+Root domain on Cloudflare: CNAME
+Invalid input. Check names, domains, ports and setting values.
+```
+
+**Cause:**
+You entered "CNAME" (a DNS record type) instead of an actual domain name.
+
+**Solution:**
+```bash
+# Run setup again
+speiihos setup
+
+# When prompted "Root domain on Cloudflare:", enter a real domain:
+# ✅ CORRECT: example.com
+# ✅ CORRECT: mydomain.net
+# ❌ WRONG: CNAME
+# ❌ WRONG: www.example.com (enter root domain, not subdomain)
+# ❌ WRONG: https://example.com (no protocol)
+```
+
+**Requirements for the domain:**
+1. You must own it
+2. It must be added to your Cloudflare account (at https://dash.cloudflare.com)
+3. DNS must be managed by Cloudflare (nameservers pointing to Cloudflare)
+
+**Alternative:** Skip the prompt by providing domain directly:
+```bash
+speiihos setup --domain yourdomain.com
+```
+
+**Don't have a domain on Cloudflare?**
+1. Go to https://dash.cloudflare.com
+2. Click "Add a Site"
+3. Enter your domain
+4. Follow nameserver setup instructions
+5. Wait 5-10 minutes for DNS propagation
+6. Then run `speiihos setup` again
+
+---
+
 #### Issue: "Port already in use"
 
 **Symptoms:**
