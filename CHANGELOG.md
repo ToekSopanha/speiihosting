@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0] - 2026-10-20
+## [0.3.0] - 2026-10-20
 
 **Major security, reliability, and usability revision**
 
@@ -243,7 +243,7 @@ See [documentation.md](documentation.md#verification-and-release-limits) for com
 
 ## Release Schedule
 
-### [Unreleased]
+### [released]
 
 #### Planned for 0.3.0
 - Registry publication (npm, PyPI)
