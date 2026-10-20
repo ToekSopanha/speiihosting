@@ -361,6 +361,8 @@ def wait_service(
     deadline = time.monotonic() + (
         timeout or (service.health.startup_timeout if service.health else 30)
     )
+    status = {}
+    last_health = {"status": "not_checked"}
     while time.monotonic() < deadline:
         runtime = read_json(store.home / "runtime.json", {})
         status = runtime.get("services", {}).get(service.name, {})
@@ -373,10 +375,8 @@ def wait_service(
                 )
             if status.get("status") == "crashed":
                 raise SpeiiError(f"{service.name} crashed. Inspect speiihos logs {service.name}.")
-            if (
-                status.get("status") == "running"
-                and (not service.command or status.get("uptime", 0) >= 1)
-                and (not service.port or listening(service.port))
+            if status.get("status") == "running" and (
+                not service.command or status.get("uptime", 0) >= 1
             ):
                 if service.full_domain:
                     infra = runtime.get("infrastructure", {})
@@ -395,11 +395,25 @@ def wait_service(
                     ) or not listening(store.settings().nginx_port):
                         time.sleep(0.15)
                         continue
-                if service.health and probe(service)["status"] != "healthy":
+                if service.health:
+                    # A successful HTTP request proves the listener is ready too.
+                    # Avoid an extra empty TCP connection before every HTTP probe.
+                    last_health = probe(service)
+                    if last_health["status"] != "healthy":
+                        time.sleep(0.15)
+                        continue
+                elif service.port and not listening(service.port):
                     time.sleep(0.15)
                     continue
                 return
         time.sleep(0.15)
+    details = f"Last process state: {status.get('status', 'not_reported')}."
+    if running and service.health:
+        details += f" HTTP health: {last_health['status']}"
+        if "http_status" in last_health:
+            details += f" (HTTP {last_health['http_status']})"
+        details += "."
     raise SpeiiError(
-        f"{service.name} did not become {'ready' if running else 'stopped'}; inspect its logs."
+        f"{service.name} did not become {'ready' if running else 'stopped'}. "
+        f"{details} Inspect speiihos logs {service.name}."
     )

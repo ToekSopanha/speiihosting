@@ -176,4 +176,6 @@ npm pack --dry-run
 
 CI runs several Python versions across Windows/macOS/Linux, uses actions pinned by commit SHA and audits dependencies. Direct executable downloads use the versioned checksums in `binaries.json` and fail closed on missing or mismatched hashes. The real Nginx test runs with Nginx on PATH or `SPEII_TEST_NGINX`. Cloudflare and container contract tests use mocks; they do not prove live account connectivity or native container enforcement.
 
+The CI startup follow-up uses concurrent test HTTP servers without reverse DNS, allows more startup time on hosted runners, and prints bounded runtime/service logs when a test fails. HTTP readiness uses the HTTP response directly; timeout messages include the last process and health status. See the [CI startup notes](documentation.md#ci-startup-follow-up-2026-10-20) for validation and remaining remote checks.
+
 See [documentation.md](documentation.md) for architecture, recovery details and operational limits; [plan.txt](plan.txt) records the revised implementation plan. MIT license.

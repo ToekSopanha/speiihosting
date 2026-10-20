@@ -55,27 +55,20 @@ def test_bot_isolation_deploy_rollback_and_lifecycle(store, tmp_path):
 
 
 def test_backend_has_no_cloudflare_dependency_and_restores_after_daemon_restart(
-    store, tmp_path, free_port
+    store, tmp_path, free_port, http_app
 ):
     source = tmp_path / "backend"
-    source.mkdir()
-    (source / "main.py").write_text(
-        "from http.server import HTTPServer,BaseHTTPRequestHandler\nimport os\n"
-        "class Handler(BaseHTTPRequestHandler):\n"
-        " def do_GET(self):\n"
-        "  self.send_response(200); self.end_headers(); self.wfile.write(b'local API')\n"
-        "HTTPServer(('127.0.0.1',int(os.environ['PORT'])),Handler).serve_forever()\n"
-    )
+    http_app(source, body="local API")
     manager = Manager(store)
     service = manager.host("backend", source, port=free_port, install=False)
     assert not service.full_domain
     assert not store.settings().tunnel_id
-    assert httpx.get(f"http://127.0.0.1:{free_port}").text == "local API"
+    assert httpx.get(f"http://127.0.0.1:{free_port}", trust_env=False).text == "local API"
     assert store.resolve(str(free_port)).name == service.name
     stop_daemon(store)
     assert not alive(store, service.name)
     manager.lifecycle(str(free_port), "start")
-    assert httpx.get(f"http://127.0.0.1:{free_port}").text == "local API"
+    assert httpx.get(f"http://127.0.0.1:{free_port}", trust_env=False).text == "local API"
 
 
 def test_failed_deploy_recovers_old_live_release(store, tmp_path):

@@ -25,7 +25,20 @@ Implementation record dated 2026-10-20. These features are implemented in this c
 
 New installations default to loopback Nginx port **8080**. Migration preserves an existing configured port. Native apps still share their OS user's file permissions; the optional container adapter requires an appropriate Linux runtime.
 
-Recorded implementation validation: **78 tests passed**, including real temporary Nginx and native process workflows; lint, formatting, Python/npm packaging and the hashed dependency audit passed. The audit reported no known vulnerabilities in the checked dependency set. The pinned cloudflared download passed checksum and CLI flag checks without connecting an account. Live Cloudflare account/DNS operations, Podman resource enforcement, secure OS keyring integration, OS startup/power behavior and remote CI execution still require their target environments. See [Verification and release limits](#verification-and-release-limits).
+Initial implementation validation: **78 tests passed**, including real temporary Nginx and native process workflows; lint, formatting, Python/npm packaging and the hashed dependency audit passed. The audit reported no known vulnerabilities in the checked dependency set. The pinned cloudflared download passed checksum and CLI flag checks without connecting an account. Live Cloudflare account/DNS operations, Podman resource enforcement, secure OS keyring integration and OS startup/power behavior still require their target environments. See [Verification and release limits](#verification-and-release-limits).
+
+### CI startup follow-up (2026-10-20)
+
+GitHub Actions reported readiness timeouts in the health rollback, ongoing health restart and backend supervisor tests. The follow-up changes address resolver dependencies and short timing budgets in those tests, and improve readiness handling:
+
+- HTTP-enabled services use the HTTP response as their listener check, avoiding a separate empty TCP connection. Services without HTTP health retain their TCP listener check. Startup errors include the last process state and HTTP health/status when available.
+- Shared test backends use a concurrent loopback HTTP server, bypass reverse DNS and send an explicit Content-Length. Local test requests ignore inherited proxy settings. Health tests allow ten seconds for startup and up to 25 seconds for monitoring transitions; the production default startup timeout remains 30 seconds.
+- Failed tests include the last 8 KiB of runtime state and each service/infrastructure log in pytest output, captured before fixture cleanup. Configuration and credential files are excluded.
+- New regression cases require a healthy HTTP response for readiness and reject an HTTP 503 response without an extra TCP probe.
+
+Local follow-up validation: **80 tests passed on Python 3.12 and 80 on Python 3.14**, each with real temporary Nginx on macOS. Ruff lint and formatting passed. An intentional isolated failure also confirmed that runtime/log tails appear in the report, earlier log content is bounded, and credential files are excluded.
+
+Remote validation of these changes still requires rerunning the complete Windows/macOS/Linux and Python 3.10/3.12/3.14 CI matrix. A passing local run does not establish that the hosted-runner failures are resolved.
 
 ## Contract and trust model
 
@@ -113,7 +126,7 @@ The daemon reconciles processes roughly every 250 ms. Configuration is cached; d
 
 HTTP health supports a local path, expected status, optional expected response substring, per-request timeout, interval, consecutive-failure threshold and startup timeout. Responses are bounded, redirects disabled and inherited proxy settings ignored. Without an explicit health configuration, newly managed HTTP services use a basic non-5xx response at `/`; configure a meaningful endpoint to validate application dependencies. Bots without a port use process startup checks.
 
-A new app must stay running for at least one second and pass its readiness check before promotion commits. Failed candidates restore the original release. Ongoing health failures trigger restart of the managed app after the configured threshold; externally managed listeners are observed without being killed. Worker exits use exponential delay capped at ten seconds; more than five exits in sixty seconds stops the crash loop. Restart/start changes the generation and clears that worker's crash state.
+A new app must stay running for at least one second and pass its readiness check before promotion commits. HTTP-enabled services use their HTTP probe as the listener/readiness check; other port-based services use a TCP check. Failed candidates restore the original release. Ongoing health failures trigger restart of the managed app after the configured threshold; externally managed listeners are observed without being killed. Worker exits use exponential delay capped at ten seconds; more than five exits in sixty seconds stops the crash loop. Restart/start changes the generation and clears that worker's crash state.
 
 `list` displays health, restart count, CPU and memory. Native metrics cover the process tree; container payload usage should be checked with podman stats (the local process snapshot covers its client). `inspect` adds routes, configured/enforced limits, disk use, data path, errors and pending recovery. Process startup, local health, cloudflared process startup, tunnel connection (cloudflared's connection PID file) and public HTTPS verification are distinct stages. `verify name` performs an explicit public request and records its result/time; deployments and lifecycle changes invalidate the verified flag. Access-protected sites may require external authenticated validation.
 

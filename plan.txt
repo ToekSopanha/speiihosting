@@ -108,17 +108,33 @@ COMPLETED IMPLEMENTATION CHECKLIST
 [x] Locked/hashed dependencies, audited CI, SHA-pinned actions and verified binary downloads.
 [x] Regression coverage for recovery, secrets, exposure, health and genuine npm rollback.
 
-Local evidence: 78 tests pass, including a real temporary Nginx;
+Initial implementation evidence: 78 tests pass, including a real temporary Nginx;
 Python/npm packaging and checks pass; the hashed dependency audit reports no known
 vulnerabilities. The official pinned cloudflared download passes integrity and CLI
 flag checks without connecting an account. Native Podman/keyring, OS startup/power,
-remote CI execution and real Cloudflare account/DNS operations still need their
+full remote CI validation and real Cloudflare account/DNS operations still need their
 respective target environments. These are verification limits, not simulated passes.
 
 Operational limits: fixed-port restarts can interrupt requests; database/external
 API side effects need separate recovery; native apps share their OS user's file
 permissions; container image storage and persistent app data are outside release
 budgets; CPU/PID enforcement requires the rootless container adapter.
+
+CI STARTUP FOLLOW-UP — 2026-10-20
+[x] Use HTTP health responses directly for HTTP readiness; keep TCP checks for
+    services without HTTP health, and preserve the one-second process startup gate.
+[x] Include last process/HTTP health state in readiness timeout errors.
+[x] Share concurrent loopback test backends without reverse-DNS dependency, send
+    Content-Length, and disable inherited proxies for local test HTTP requests.
+[x] Give health integration tests a 10-second startup allowance and 25-second
+    monitoring wait; keep the production default startup timeout at 30 seconds.
+[x] Print bounded runtime/log tails on test failure before fixture teardown.
+[x] Add healthy/unhealthy HTTP readiness regression cases.
+[x] Local macOS validation: 80 tests pass on Python 3.12 and 80 on Python 3.14,
+    each including real temporary Nginx. Ruff lint/format checks pass. An isolated
+    intentional failure confirms bounded diagnostics without credential files.
+[ ] Rerun the full remote OS/Python matrix after applying these changes. The exact
+    hosted-runner failure cause is not confirmed by the original summary alone.
 
 # ORIGINAL V1 PLAN — HISTORICAL REFERENCE
 

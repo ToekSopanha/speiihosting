@@ -19,7 +19,9 @@ NGINX = os.environ.get("SPEII_TEST_NGINX") or shutil.which("nginx")
 pytestmark = pytest.mark.skipif(not NGINX or os.name == "nt", reason="requires POSIX Nginx")
 
 
-def test_real_nginx_spa_proxy_stop_deploy_and_rollback(store, tmp_path, monkeypatch, free_port):
+def test_real_nginx_spa_proxy_stop_deploy_and_rollback(
+    store, tmp_path, monkeypatch, free_port, http_app
+):
     (store.home / "bin/nginx").symlink_to(NGINX)
     connector = store.home / "bin/cloudflared"
     connector.write_text(f"#!{sys.executable}\nimport time\nwhile True: time.sleep(1)\n")
@@ -39,14 +41,7 @@ def test_real_nginx_spa_proxy_stop_deploy_and_rollback(store, tmp_path, monkeypa
     (source / "assets/logo.svg").write_text("<svg></svg>")
     (source / ".env").write_text("SHOULD_NEVER_BE_SERVED=secret")
     backend = tmp_path / "api"
-    backend.mkdir()
-    (backend / "main.py").write_text(
-        "from http.server import HTTPServer,BaseHTTPRequestHandler\nimport os\n"
-        "class Handler(BaseHTTPRequestHandler):\n"
-        " def do_GET(self):\n"
-        "  self.send_response(200); self.end_headers(); self.wfile.write(self.path.encode())\n"
-        "HTTPServer(('127.0.0.1',int(os.environ['PORT'])),Handler).serve_forever()\n"
-    )
+    http_app(backend, body=None)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         backend_port = sock.getsockname()[1]
@@ -57,7 +52,9 @@ def test_real_nginx_spa_proxy_stop_deploy_and_rollback(store, tmp_path, monkeypa
     manager.link(front.name, "api", "/api")
     other = manager.host("frontend", source, name="other", subdomain="other", install=False)
     with httpx.Client(
-        base_url=f"http://127.0.0.1:{free_port}", headers={"Host": front.full_domain}
+        base_url=f"http://127.0.0.1:{free_port}",
+        headers={"Host": front.full_domain},
+        trust_env=False,
     ) as client:
         assert "release one" in client.get("/some/client/route").text
         assert client.get("/.env").status_code == 403

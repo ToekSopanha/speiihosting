@@ -9,27 +9,11 @@ from speiihosting.cli import app
 from speiihosting.config import HealthCheck, Service, SpeiiError
 from speiihosting.health import probe
 from speiihosting.manager import Manager
-from speiihosting.process import alive
-from speiihosting.storage import read_json
+from speiihosting.process import alive, wait_service
+from speiihosting.storage import read_json, write_json
 
 
-def app_source(source, code=200, body="ready"):
-    source.mkdir(exist_ok=True)
-    (source / "main.py").write_text(
-        "from http.server import HTTPServer,BaseHTTPRequestHandler\nimport os\nfrom pathlib import Path\n"
-        "class Handler(BaseHTTPRequestHandler):\n"
-        " def do_GET(self):\n"
-        "  code = 503 if (Path(os.environ['SPEII_DATA_DIR'])/'unhealthy').exists() else "
-        + str(code)
-        + "\n"
-        "  self.send_response(code); self.end_headers(); self.wfile.write("
-        + repr(body.encode())
-        + ")\n"
-        "HTTPServer(('127.0.0.1',int(os.environ['PORT'])),Handler).serve_forever()\n"
-    )
-
-
-def eventually(predicate, timeout=10):
+def eventually(predicate, timeout=25):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():
@@ -38,9 +22,11 @@ def eventually(predicate, timeout=10):
     raise AssertionError("Timed out waiting for health transition")
 
 
-def test_http_health_failure_restores_last_working_release(store, tmp_path, free_port, monkeypatch):
+def test_http_health_failure_restores_last_working_release(
+    store, tmp_path, free_port, monkeypatch, http_app
+):
     source = tmp_path / "checked-api"
-    app_source(source)
+    http_app(source)
     monkeypatch.setenv("HTTP_PROXY", "http://invalid.proxy:1")
     monkeypatch.setenv("HTTPS_PROXY", "http://invalid.proxy:1")
     manager = Manager(store)
@@ -49,10 +35,10 @@ def test_http_health_failure_restores_last_working_release(store, tmp_path, free
         source,
         port=free_port,
         install=False,
-        health=HealthCheck(path="/health", expected_body="ready", startup_timeout=2),
+        health=HealthCheck(path="/health", expected_body="ready", startup_timeout=10),
     )
     assert probe(service)["status"] == "healthy"
-    app_source(source, code=503)
+    http_app(source, code=503)
     with pytest.raises(SpeiiError, match="did not become ready"):
         manager.deploy(service.name, install=False)
     assert probe(store.resolve(service.name))["status"] == "healthy"
@@ -60,16 +46,16 @@ def test_http_health_failure_restores_last_working_release(store, tmp_path, free
     assert alive(store, service.name)
 
 
-def test_ongoing_health_failure_restarts_one_service(store, tmp_path, free_port):
+def test_ongoing_health_failure_restarts_one_service(store, tmp_path, free_port, http_app):
     source = tmp_path / "monitored-api"
-    app_source(source)
+    http_app(source)
     service = Manager(store).host(
         "backend",
         source,
         port=free_port,
         install=False,
         health=HealthCheck(
-            path="/health", expected_body="ready", interval=1, failures=1, startup_timeout=3
+            path="/health", expected_body="ready", interval=1, failures=1, startup_timeout=10
         ),
     )
     marker = store.site(service.name) / "data/unhealthy"
@@ -85,6 +71,49 @@ def test_ongoing_health_failure_restarts_one_service(store, tmp_path, free_port)
     )
     marker.unlink()
     eventually(lambda: probe(service)["status"] == "healthy")
+
+
+@pytest.mark.parametrize("healthy", [True, False])
+def test_http_readiness_requires_a_healthy_request_without_a_separate_tcp_probe(
+    store, tmp_path, monkeypatch, healthy
+):
+    service = Service(
+        name="http-readiness",
+        type="backend",
+        source=tmp_path,
+        port=8000,
+        command=["python", "main.py"],
+        health=HealthCheck(),
+    )
+    write_json(
+        store.home / "runtime.json",
+        {
+            "services": {
+                service.name: {
+                    "generation": service.generation,
+                    "status": "running",
+                    "uptime": 2,
+                }
+            }
+        },
+    )
+
+    def unexpected_tcp_probe(port):
+        pytest.fail("HTTP readiness must not open an additional empty TCP connection")
+
+    monkeypatch.setattr("speiihosting.ports.listening", unexpected_tcp_probe)
+    monkeypatch.setattr(
+        "speiihosting.health.probe",
+        lambda _: {
+            "status": "healthy" if healthy else "unhealthy",
+            "http_status": 200 if healthy else 503,
+        },
+    )
+    if healthy:
+        wait_service(store, service, timeout=0.1)
+    else:
+        with pytest.raises(SpeiiError, match=r"HTTP health: unhealthy \(HTTP 503\)"):
+            wait_service(store, service, timeout=0.1)
 
 
 def test_offline_rollback_keeps_dependencies_and_persistent_data(store, tmp_path, monkeypatch):
