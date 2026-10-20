@@ -1,0 +1,1089 @@
+# SPEIIHOSTING V2 — SECURITY, RELIABILITY AND USABILITY REVISION
+# Accepted implementation scope: 2026-10-20
+
+This revision supersedes conflicting behavior in the original architecture below.
+The original text is retained as historical context, not as the current contract.
+
+1. SECURITY BOUNDARIES
+- New backend services stay private until explicitly linked with --backend,
+  --frontend or link. Same-origin routing does not replace API authorization.
+- App and build processes receive an environment allowlist plus their own .env.
+  Hosting API tokens, tunnel tokens and the hosting data-root variable are reserved.
+- Keep hosting credentials outside config.json; support a private credential file
+  and an optional secure OS keyring. Preserve legacy settings through migrations.
+- Native process mode is for trusted code under the current OS account. Add an
+  optional rootless Podman adapter for stronger isolation, pinned images, read-only
+  code/root filesystem, a separate data mount, no capabilities, and resource limits.
+- The tool must not claim process detachment or virtualenvs isolate filesystem access.
+
+2. HEALTH AND HONEST STATUS
+- Add HTTP checks with configurable path, status, response text, timeout and retries.
+- Run ongoing checks in a bounded worker pool so an unhealthy app cannot block others.
+- Show process, application health, tunnel connection and public URL verification
+  separately. Public verification is explicit and never inferred from a running PID.
+
+3. DEPLOYMENT STATE MACHINE AND RECOVERY
+- Journal old service state and every promotion intent before changing live files.
+- Recover interrupted promotion on the next supervisor/CLI start, or via recover.
+- Once committed, finish cleanup without undoing a healthy release.
+- Retain live and one complete runnable previous release, including dependencies.
+  Rollback must not depend on an online package registry or rebuild scripts.
+- Keep writable uploads/databases in sites/<name>/data, outside release cleanup.
+- Enforce a configurable per-site release disk budget and retain critical fsyncs.
+- Fixed-port process restarts can interrupt requests; do not promise zero downtime.
+
+4. PERFORMANCE
+- Cache configuration by file identity; avoid parsing unchanged JSON every loop.
+- Persist lifecycle transitions immediately, publish disposable metrics less often,
+  and avoid fsync for reconstructible runtime metrics.
+- Reuse safe package download caches; do not share writable installed dependencies
+  between distinct live releases.
+- Cache only content-hashed static assets as immutable; HTML revalidates.
+- Add upstream keepalive, security headers, configurable streaming and bounded input.
+
+5. PROJECT CONFIGURATION AND CLI
+- Add a validated versioned speiihosting.toml project manifest with CLI overrides.
+- Add project-config generation, dry-run previews, JSON output, inspect and recover.
+- Previews show commands, routes, isolation, health checks and ports without publishing.
+- Show restart count, CPU/RAM, health, persistent data path and disk consumption.
+
+6. SOFTWARE SUPPLY CHAIN
+- Require a trusted checksum for directly downloaded executables.
+- Support strict Python hash checking and npm lockfile-based installs.
+- Generate locked, hashed development dependency artifacts for supported runtimes.
+- Audit dependencies in CI, pin external actions to reviewed full commit SHAs,
+  restrict workflow token permissions, and automate dependency update proposals.
+
+7. CODE QUALITY AND REGRESSION TESTS
+- Use typed runtime adapters, validated schemas and explicit transaction phases.
+- Catch actionable exceptions at boundaries; preserve journal evidence if recovery fails.
+- Test inherited-secret exclusion, explicit-only API exposure, HTTP health failures,
+  interrupted promotion before/after each rename, failed recovery, runnable offline
+  rollback, isolation arguments, deterministic dependency checks and CLI previews.
+- Exercise real Nginx routing and native detached process workflows locally.
+- Native Podman/keyring integration and OS startup/power changes require an available
+  target runtime; distinguish mocked contract tests from live integration evidence.
+
+8. MIGRATION POLICY
+- Read version 1 settings and services without discarding user configuration.
+- Preserve existing explicitly recorded links; new registrations never auto-link.
+- Move persisted credentials out of config.json during migrate or a settings save.
+- Preserve existing nginx_port values; new installs default to unprivileged port 8080.
+
+Implementation status is recorded in README.md/documentation.md after verification.
+
+IMPLEMENTATION RECORD — VERSION 0.2.0
+[Release record: 2026-10-20; implemented locally, not yet registry-published.]
+
+WHAT WAS ADDED
+- HTTP health monitoring; explicit public HTTPS verification; inspect/recover/migrate.
+- Versioned project manifests, project init/validate, dry-run and JSON output.
+- Durable deployment recovery, complete offline rollback and persistent app data.
+- Optional secure keyring and Linux rootless Podman runtime adapter.
+
+WHAT WAS CHANGED
+- New APIs require an explicit public link; unlink removes an existing mapping.
+- Hosting credentials are separate from settings and excluded from app/build envs.
+- Configuration is cached; metrics writes are coalesced; Nginx gains conservative
+  asset caching, upstream keepalive, streaming support and bounded requests.
+- Build logs are separate; release storage is budgeted; dependency/binary integrity
+  and CI configuration are hardened with locks, hashes and pinned action commits.
+- New Nginx installations default to loopback port 8080; existing ports are kept.
+
+UPGRADE FOLLOW-UP FOR EXISTING INSTALLATIONS
+- Run speiihos migrate; inspect existing routes and unlink unwanted API mappings.
+- Move app-managed writable files to SPEII_DATA_DIR; no automatic data relocation.
+- Configure an app-specific health endpoint and explicitly verify public HTTPS.
+- Registry publication and target-environment integration verification remain open.
+
+COMPLETED IMPLEMENTATION CHECKLIST
+[x] Explicit-only API linking, unlink, inbound/outbound route inspection.
+[x] Sanitized app/build/supervisor environments and separate credential providers.
+[x] Versioned state migration; optional secure keyring; rootless Podman runtime contract.
+[x] Bounded asynchronous HTTP monitoring, expected responses and restart thresholds.
+[x] Journaled promotion/recovery, complete offline rollback and retained persistent data.
+[x] Cached configuration, coalesced metrics without fsync, bounded release disk usage.
+[x] Conservative immutable caching, upstream keepalive, streaming and HTTP limits/headers.
+[x] Project manifests, CLI overrides, dry runs, JSON, inspect, verify, recover and migrate.
+[x] Locked/hashed dependencies, audited CI, SHA-pinned actions and verified binary downloads.
+[x] Regression coverage for recovery, secrets, exposure, health and genuine npm rollback.
+
+Local evidence: 78 tests pass, including a real temporary Nginx;
+Python/npm packaging and checks pass; the hashed dependency audit reports no known
+vulnerabilities. The official pinned cloudflared download passes integrity and CLI
+flag checks without connecting an account. Native Podman/keyring, OS startup/power,
+remote CI execution and real Cloudflare account/DNS operations still need their
+respective target environments. These are verification limits, not simulated passes.
+
+Operational limits: fixed-port restarts can interrupt requests; database/external
+API side effects need separate recovery; native apps share their OS user's file
+permissions; container image storage and persistent app data are outside release
+budgets; CPU/PID enforcement requires the rootless container adapter.
+
+# ORIGINAL V1 PLAN — HISTORICAL REFERENCE
+
+# ==============================================================================
+# SPEIIHOSTING - ARCHITECTURE & IMPLEMENTATION PLAN
+# Turn any PC or old laptop into an instant web hosting server
+# ==============================================================================
+
+[1] VISION & CORE VALUE
+--------------------------------------------------------------------------------
+speiihosting is an automated self-hosting CLI tool and server manager that 
+transforms any computer (Windows 10, Windows 11, macOS, Linux, or an old laptop/PC) 
+into a public web server.
+
+Key Highlights:
+- Implementation Stack: Built in Python with modern packaging (`pyproject.toml`).
+- Dual Ecosystem Distribution: Installable via pip (`pip install speiihosting`) or npm (`npm install -g speiihosting`).
+- First-class cross-platform support: Windows 10, Windows 11, macOS, and Linux.
+- No public static IP or router port forwarding needed (uses Cloudflare Tunnels).
+- Automatic free HTTPS/SSL via Cloudflare Edge.
+- Built-in Dependency Doctor: checks and auto-installs Nginx, Python, cloudflared.
+- 4 Main Hosting Engines: Static Frontend + Dynamic Web/SSR + Backend Services + 24/7 Bots.
+
+OFFICIAL PYTHON CORE ARCHITECTURE & DEPENDENCIES:
+1. CLI Framework: `typer` + `rich`
+   - Type-hinted clean CLI command definitions (`speiihos host-front`, `speiihos host-back`, etc.).
+   - Rich terminal UI with colored status badges, tables for `speiihos list`, and spinners.
+2. Process Supervision & Background Daemons: `subprocess` + `psutil`
+   - Launches detached background processes (`DETACHED_PROCESS` on Windows, `setsid` on POSIX).
+   - Monitors live PIDs, memory/CPU usage, detects crashes, and auto-restarts workers.
+3. Configuration & Schemas: `pydantic` + `pathlib`
+   - Strict validation for `config.json` and `services.json`.
+   - Cross-platform safe path manipulation across Windows `%USERPROFILE%` and Unix `~`.
+4. HTTP Client for Cloudflare API: `httpx`
+   - Fast, resilient communication with Cloudflare API for automated tunnel & DNS management.
+
+================================================================================
+[2] SYSTEM REQUIREMENTS CHECKER & AUTO-INSTALLER ("SPEII DOCTOR")
+================================================================================
+Whenever the tool runs (or via `speiihos doctor` / `speiihos setup`), it performs a full 
+environment audit and auto-installs missing requirements:
+
+1. NGINX CHECK:
+   - Check: `which nginx` (Linux/macOS) or `where.exe nginx` / internal path (Windows).
+   - If missing:
+     * Windows 10 & 11:
+       Option A: `winget install NGINX.NGINX`
+       Option B: Auto-downloads official `nginx-windows.zip` from nginx.org, 
+       unpacks into `%USERPROFILE%\.speiihosting\bin\nginx\`, and adds to PATH.
+     * macOS: `brew install nginx`
+     * Ubuntu/Debian: `sudo apt update && sudo apt install -y nginx`
+     * RHEL/Fedora: `sudo dnf install -y nginx`
+   - Auto-configure: Sets up `speiihos.d/` directory for modular site configs.
+
+2. CLOUDFLARED CHECK:
+   - Check: `which cloudflared` (Linux/macOS) or `where.exe cloudflared` (Windows).
+   - If missing:
+     * Windows 10 & 11:
+       Option A: `winget install Cloudflare.cloudflared`
+       Option B: Auto-downloads official `cloudflared-windows-amd64.exe` to 
+       `%USERPROFILE%\.speiihosting\bin\cloudflared.exe`.
+     * macOS: `brew install cloudflared` or direct binary download.
+     * Linux: Auto-download the official `cloudflared-linux-amd64` / `arm64` deb/binary.
+   - Verifies system service registration so the tunnel survives reboots.
+
+3. PYTHON & RUNTIME CHECK:
+   - Check: `python3 --version` / `python --version` and `pip --version`.
+   - If missing:
+     * Windows 10 & 11: `winget install Python.Python.3.11` or downloads python installer.
+     * macOS: `brew install python`
+     * Linux: Auto-installs `python3`, `python3-pip`, and `python3-venv`.
+   - Used for running backend Python services (FastAPI, Flask, Django) and automation scripts.
+
+4. CLOUDFLARE ACCOUNT CONFIGURATION WIZARD:
+   - Prompt user on first run if not configured:
+     * Step A: Ask for Cloudflare API Token (with Zone.DNS + Account.Tunnel permissions) 
+       OR run interactive `cloudflared tunnel login`.
+     * Step B: Detect user's available domains in Cloudflare (e.g. `mydevsite.com`).
+     * Step C: Automatically create a dedicated Tunnel for this machine:
+       e.g., `speiihos-home-server`.
+     * Step D: Save credentials securely in `~/.speiihosting/config.json` 
+       (Windows: `%USERPROFILE%\.speiihosting\config.json`).
+
+================================================================================
+[3] BIG FUNCTION 1: FRONTEND HOSTING ENGINE (`speiihos host-front`)
+================================================================================
+Designed specifically for static websites, Single Page Applications (SPA), 
+and frontend frameworks (React, Vue, Vite, Next.js static export, Svelte, HTML/CSS).
+
+HOW IT WORKS:
+1. Directory Inspection & Framework Detection:
+   - Scans the target folder for static builds:
+     * `./dist` (Vite, Vue, modern React)
+     * `./build` (Create React App)
+     * `./out` (Next.js static export)
+     * `./public` or `./index.html` (Vanilla HTML/CSS/JS)
+   - If multiple exist, prompts user or allows override (`--dir ./dist`).
+
+2. Nginx Static Site Generation:
+   - Creates a dedicated vhost file: `/etc/nginx/speiihosting.d/front_<subdomain>.conf`
+   - Configures:
+     * Document root pointing to the build folder.
+     * SPA Fallback Routing: `try_files $uri $uri/ /index.html;` (prevents 404 on refresh).
+     * Asset Caching: Long cache for hashed static files (`/assets/`, `/static/`).
+     * Security: Denies access to hidden files (`.env`, `.git/`, `.DS_Store`).
+     * Gzip compression enabled for HTML, JS, CSS, SVG.
+
+3. Cloudflare Tunnel Binding:
+   - Registers subdomain route (e.g., `portfolio.mydevsite.com`).
+   - Routes ingress to local Nginx port 80 with `Host: portfolio.mydevsite.com`.
+   - Automatically provisions DNS CNAME record in Cloudflare.
+
+CLI Usage:
+  $ cd ~/my-react-app
+  $ speiihos host-front --subdomain portfolio
+  -> Found build folder: ./dist
+  -> Generated Nginx vhost: portfolio.mydevsite.com
+  -> Bound Cloudflare Tunnel: https://portfolio.mydevsite.com
+  -> Status: LIVE (HTTPS)
+
+================================================================================
+[4] BIG FUNCTION 2: DYNAMIC WEB & FULL-STACK SSR ENGINE (`speiihos host-dynamic`)
+================================================================================
+Designed for server-rendered web applications, full-stack frameworks, and monoliths:
+- Node.js SSR: Next.js (Server Components / SSR), Nuxt.js (Vue SSR), SvelteKit, Remix, Astro
+- Python Full-Stack: Django (Jinja2 / Templates), Flask, Streamlit, FastAPI with HTML
+- PHP: Laravel, WordPress, Symfony
+- Ruby on Rails, Go web templates, Rust Actix/Axum
+
+WHAT IS DYNAMIC WEB?
+In dynamic web applications, the server generates HTML on-the-fly for each request 
+and handles its own backend routes. Unlike static sites, it requires:
+1. A Public Domain + Cloudflare Tunnel + Free SSL (so visitors can access it).
+2. A Managed 24/7 Background Process (e.g. Next.js Node server or Django Gunicorn).
+3. Nginx Reverse Proxy with Static Asset Caching & WebSockets.
+
+HOW IT WORKS:
+1. Framework Auto-Detection:
+   - Next.js: Detects `"next"` in `package.json`. Runs `npm run build && npm start`.
+   - Django: Detects `manage.py` and `wsgi.py`. Runs with Gunicorn or Uvicorn.
+   - Nuxt: Detects `"nuxt"` in `package.json`. Runs `node .output/server/index.mjs`.
+   - Laravel / PHP: Detects `artisan`. Spawns PHP server or PHP-FPM.
+   - Custom Run Command: User can specify `--run "python app.py"` or `--port 3000`.
+
+2. Nginx Reverse Proxy & High-Performance Asset Caching:
+   - Generates dedicated vhost: `/etc/nginx/speiihosting.d/dynamic_<subdomain>.conf`
+   - Proxies dynamic web traffic to internal port: `http://127.0.0.1:<PORT>;`
+   - Static Asset Acceleration:
+     Directly serves and caches framework static assets from disk (e.g., `/_next/static/` 
+     or `/static/`), bypassing the Node/Python server for blazing speed!
+   - Full WebSocket Support: Enables `Upgrade` and `Connection "upgrade"` for Next.js HMR, 
+     LiveView, and real-time updates.
+
+3. Process Supervision & Crash Recovery:
+   - Spawns the web server process as a 24/7 detached background daemon.
+   - Auto-restarts if Node.js or Python throws an unhandled error.
+   - Auto-starts on PC reboot.
+   - Survives closing the terminal or CMD window.
+
+4. Auto-Save Safe Deployment (`speiihos deploy`):
+   - Code runs from isolated live staging: `~/.speiihosting/sites/<app-name>/live/`.
+   - The developer can edit code in VS Code with auto-save turned on without breaking 
+     the running web application.
+   - Running `speiihos deploy` rebuilds (`npm run build` or DB migrations) and reloads 
+     the live process seamlessly.
+
+CLI Usage:
+  $ cd ~/projects/my-nextjs-app
+  $ speiihos host-dynamic --subdomain myapp --port 3000
+  (or alias: speiihos host-app --subdomain myapp --port 3000)
+  -> Detected Dynamic Web Framework: Next.js (SSR)
+  -> Background Server running on: http://127.0.0.1:3000 (PID: 64120)
+  -> Nginx Reverse Proxy & Asset Cache: CONFIGURED
+  -> Bound Cloudflare Tunnel: https://myapp.mydevsite.com
+  -> Status: LIVE (HTTPS - Full-Stack Dynamic Web)
+
+================================================================================
+[5] BIG FUNCTION 3: BACKEND SERVICE ENGINE (`speiihos host-back`)
+================================================================================
+Designed for API servers, web backends, and microservices (Python FastAPI/Flask, 
+Node.js Express, Go, Docker, or any local service running on a port).
+
+CORE PRINCIPLE: BACKEND REQUIRES NO DOMAIN AND NO SUBDOMAIN!
+The backend does NOT get exposed with its own domain or subdomain:
+- No Cloudflare DNS records needed for the backend.
+- No public domain or subdomain needed for the backend.
+- Speiihos simply brings up the backend as a reliable, 24/7 background service 
+  (like PM2 or systemd) running locally on `http://127.0.0.1:<PORT>`.
+- The Frontend communicates with it directly!
+
+HOW FRONTEND COMMUNICATES WITH THE BACKEND:
+1. Internal Local Gateway:
+   The Frontend (which has the public domain and Cloudflare tunnel) automatically 
+   routes API requests internally to the local backend port:
+   `https://yourdomain.com/api`  ==[Nginx Internal Loopback]==>  `http://127.0.0.1:<PORT>/`
+2. Zero CORS Issues:
+   Because the visitor's browser talks to `yourdomain.com`, all API requests stay on the 
+   exact same origin. No CORS headers or configuration needed!
+3. Server-Side Rendering (SSR) / Next.js / Nuxt:
+   If the frontend has a server component, it communicates with the backend directly 
+   over the machine's local loopback network (`http://127.0.0.1:<PORT>`).
+
+HOW IT WORKS:
+1. Process Supervision & Service Management:
+   - Option A: Already Running Service
+     * Speiihos registers the active port: `speiihos host-back --port 8000`
+   - Option B: Auto-Managed Process Runner
+     * Python: Detects `main.py`, `app.py`, `requirements.txt`.
+       - Creates virtualenv (`venv`), installs dependencies, runs via Uvicorn/Gunicorn.
+     * Node.js: Detects `package.json`. Runs `npm start` or specified command.
+     * Starts and monitors the background service (via Windows Service, systemd, or speiihos daemon).
+     * Crash Auto-Recovery: Restarts automatically if the backend throws an unhandled exception.
+     * Boot Auto-Start: Boots up automatically when the PC powers on.
+
+2. Nginx Internal Proxy Binding:
+   - Speiihos maps `/api/` in the local Nginx frontend to `http://127.0.0.1:<PORT>/`.
+   - Passes standard proxy headers (`X-Real-IP`, `X-Forwarded-For`).
+   - Supports WebSockets (`Upgrade` and `Connection "upgrade"`).
+   - Absolutely NO public domain or Cloudflare DNS changes made!
+
+3. SMART SERVICE NAMING STRATEGY (HOW THE SERVICE NAME IS DETERMINED):
+   When running `speiihos host-back --port 8000`, Speiihos assigns the service name 
+   using a smart priority ladder:
+   - Priority 1: Explicit flag: `--name <custom_name>` (e.g., `--name auth-api`).
+   - Priority 2: Project manifest: reads `"name"` from `package.json` or `pyproject.toml`.
+   - Priority 3: Current directory name: e.g., folder `~/projects/my-api` -> name: `my-api`.
+   - Priority 4: Fallback: `backend-<port>` (e.g., `backend-8000`).
+   
+   DUAL IDENTIFIER SUPPORT:
+   To make life easy, management commands accept BOTH the service name OR the port number!
+   - By Name: `speiihos stop my-api`   or `speiihos logs my-api`
+   - By Port: `speiihos stop 8000`     or `speiihos logs 8000`
+
+CLI Usage:
+  $ cd ~/projects/my-fastapi-app
+  $ speiihos host-back --port 8000
+  -> Service Name: my-fastapi-app (Auto-detected from directory)
+  -> Target:       http://127.0.0.1:8000 (PID: 58291)
+  -> Auto-restart on crash: ENABLED
+  -> Auto-start on boot: ENABLED
+  -> Frontend connected at: /api (Zero CORS, No domain needed!)
+  -> Status: ACTIVE (Service Running)
+
+================================================================================
+[6] BIG FUNCTION 3: BOT HOSTING ENGINE (`speiihos host-bot`)
+================================================================================
+Designed for 24/7 background bots, automation scripts, and event listeners:
+- Telegram Bots (python-telegram-bot, aiogram, telegraf)
+- Discord Bots (discord.py, discord.js)
+- Slack Bots (Socket mode / Events API)
+- WhatsApp Bots, Trading Bots, Web Scrapers, Cron Workers
+
+CORE PRINCIPLE: ZERO DOMAIN & ZERO PORT NEEDED (LONG-POLLING / SOCKET MODE)
+Most bots connect outbound to Telegram/Discord servers via long-polling or 
+persistent WebSockets. They do NOT need inbound HTTP, ports, or Nginx:
+- No Cloudflare setup needed for polling bots.
+- No public port or router configuration needed.
+- Speiihos spins up the bot as a 24/7 detached daemon.
+- Survives closing CMD / Terminal window.
+- Auto-restarts if the bot crashes or network drops.
+- Auto-boots when the computer restarts.
+
+OPTIONAL WEBHOOK MODE:
+If a Telegram or Slack bot uses incoming webhooks instead of polling:
+  $ speiihos host-bot --webhook --port 8443 --subdomain mybot
+  - Speiihos automatically bridges Cloudflare Tunnel + Nginx to the bot's port.
+  - Automatically provisions HTTPS URL: `https://mybot.domain.com` (or `/webhook`).
+
+HOW IT WORKS:
+1. Smart Runtime & Entrypoint Detection:
+   - Python: Detects `bot.py`, `main.py`, `app.py`, `requirements.txt`.
+     * Auto-creates isolated virtualenv (`venv`), installs dependencies, runs with Python.
+   - Node.js: Detects `bot.js`, `index.js`, `package.json`.
+     * Runs `npm start` or `node bot.js`.
+   - Custom Command Override:
+     * `speiihos host-bot --run "python run_bot.py"`
+
+2. Environment & Secrets Auto-Loading (`.env`):
+   - Bots require secret API tokens (`TELEGRAM_BOT_TOKEN`, `DISCORD_TOKEN`).
+   - Speiihos automatically detects `.env` in the bot directory and injects 
+     variables into the background service environment securely.
+
+3. Process Supervision & Crash Recovery:
+   - Process runs with detached flags (`DETACHED_PROCESS` on Windows, `setsid` on POSIX).
+   - If an unhandled exception or network disconnect crashes the bot, Speiihos 
+     restarts it in seconds.
+   - Tracks CPU/RAM and logs directly to `~/.speiihosting/logs/<bot-name>.log` with automatic 5 MB rotation (preserves history, max 10 MB total disk footprint per bot).
+
+4. Auto-Save Safe Deployment (`speiihos deploy`):
+   - Works identically to frontend and backend:
+     Code runs from isolated live directory `~/.speiihosting/sites/<bot-name>/live/`.
+   - The developer can edit bot code in VS Code with auto-save turned on without 
+     breaking the running bot.
+   - Running `speiihos deploy` inside the bot folder safely syncs updates and restarts 
+     the bot daemon.
+
+CLI Usage:
+  $ cd ~/projects/my-telegram-bot
+  $ speiihos host-bot
+  -> Detected bot entrypoint: bot.py (Python)
+  -> Loaded environment: .env (TELEGRAM_BOT_TOKEN found)
+  -> Mode: Long-Polling (No port/domain needed)
+  -> Background Service ACTIVE (PID: 61829)
+  -> Auto-restart on crash: ENABLED
+  -> Auto-start on boot: ENABLED
+  -> Status: RUNNING (24/7 Bot Online)
+
+================================================================================
+[7] PORT CONFLICT PREVENTION ENGINE
+================================================================================
+Question: Can hosting multiple websites cause port conflicts?
+Answer:
+1. For Frontend Websites (Static / React / Vue / HTML):
+   - NO PORT CONFLICTS AT ALL!
+   - All frontend websites share the exact same internal port (Port 80 on Nginx).
+   - Nginx uses Virtual Hosting (`server_name` matching HTTP Host headers).
+   - Whether you host 1 website or 50 websites, they all run through Nginx port 80.
+
+2. For Backend Websites (APIs / Node.js / Python):
+   - Each backend process needs a unique local internal port (e.g., 8000, 8001).
+   - HOW SPEII PREVENTS CONFLICTS AUTOMATICALLY:
+     * Port Registry: Speii maintains a local registry (`~/.speiihosting/registry.json`).
+     * Port Availability Scanner: Before launching or reverse-proxying a backend,
+       Speii tests if the port is already in use (`socket.bind` check).
+     * Auto-Increment Allocation: If a conflict is detected, Speii warns the user
+       or automatically offers the next free available port (e.g. 8000 -> 8001).
+     * External routing is 100% clean: The public user ALWAYS accesses standard HTTPS
+       `https://api1.yourdomain.com` and `https://api2.yourdomain.com`.
+       Cloudflare Tunnel routes both to Nginx, and Nginx maps each subdomain to 
+       its respective internal port without exposing any ports to the internet!
+
+================================================================================
+[8] SETTINGS & CONFIGURATION ENGINE (`speiihos config`)
+================================================================================
+Because some users only host temporarily on personal laptops while others host 
+24/7 on dedicated PCs, all behaviors are fully modular and configurable:
+
+1. DEFAULT SETTINGS:
+   - Laptop Sleep Prevention: OFF by default (prevents draining battery unexpectedly).
+   - Auto-start on Boot: ON by default (can be toggled off for temporary users).
+   - Default Root Domain: configured during init.
+
+2. CONFIGURATION COMMANDS:
+   - `speiihos config`: Interactive menu to view and change any setting.
+   - `speiihos config set sleep_prevent on|off`: Toggles laptop lid sleep prevention.
+     * On Windows 10 & 11: Uses `powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0`
+     * On Linux: Updates `/etc/systemd/logind.conf` (`HandleLidSwitch=ignore`)
+     * On macOS: Uses `pmset` / `caffeinate`
+   - `speiihos config set autostart on|off`: Toggles whether speii boots when PC turns on.
+   - `speiihos config set domain <domain>`: Changes default hosting root domain.
+   - `speiihos config show`: Prints all current configurations.
+   Stored securely in `~/.speiihosting/config.json` (Windows: `%USERPROFILE%\.speiihosting\config.json`).
+
+================================================================================
+[9] PM2 / SYSTEMCTL-LIKE PROCESS SUPERVISOR & AUTO-BOOT
+================================================================================
+Speii acts like `pm2` and `systemctl` combined, managing both system tunnels 
+and individual application processes:
+
+1. PC BOOT & SHUTDOWN BEHAVIOR:
+   - System Service Integration:
+     * Windows 10 & 11: Registers a native Windows Service (via Windows Service Controller / 
+       NSSM / Task Scheduler with `ONSTART` trigger). Runs silently in background on boot.
+     * Linux: Registers a systemd service (`speiihos.service`).
+     * macOS: Registers a launchd agent (`io.speiihosting.daemon.plist`).
+   - When PC turns ON:
+     * The master daemon boots automatically.
+     * Starts Nginx and the Cloudflare Tunnel.
+     * Resurrects all previously running backend and frontend services.
+   - When PC turns OFF:
+     * Receives OS shutdown signal (SIGTERM on Unix, WM_QUERYENDSESSION on Windows).
+     * Gracefully terminates all backend processes and closes tunnel connections.
+
+2. SERVICE FAULT ISOLATION (ZERO BLAST RADIUS):
+   Problem: If one backend crashes or has errors, it must NEVER bring down other sites.
+   Solution:
+   - Independent Process Trees:
+     Each backend (Python, Node, Go) runs in its own isolated process with its own PID.
+     Logs are completely isolated: `~/.speiihosting/logs/<name>.log` with automatic rotation and a hard 5 MB size cap per file.
+   - Crash Backoff Protection:
+     If a backend crashes with an unhandled exception, Speii attempts to restart it.
+     If it crashes > 5 times in 60 seconds, Speii flags it as `[CRASHED]` and stops 
+     restarting it to avoid eating CPU. Other sites continue running 100% normally!
+   - Nginx Config Isolation:
+     Each site gets its own isolated config file (`/etc/nginx/speiihosting.d/<name>.conf`).
+     Before applying any change, Speii tests syntax with `nginx -t`. If invalid, 
+     the change is rejected and existing live sites are never interrupted.
+
+3. TERMINAL INDEPENDENCE & DETACHED PROCESS EXECUTION:
+   Problem: In regular scripts, closing Command Prompt or Terminal sends SIGHUP or 
+   kills child console processes, which would crash the web server.
+   Solution: Complete Process Detachment & Daemonization:
+   - On Windows 10 & 11:
+     * Child processes are spawned using `DETACHED_PROCESS` and `CREATE_NEW_PROCESS_GROUP` 
+       flags with `windowsHide: true`.
+     * Processes are completely decoupled from the Command Prompt / PowerShell console session.
+   - On Linux & macOS:
+     * Spawns using POSIX `setsid()`, double-forking, and `unref()` so they ignore `SIGHUP`.
+     * Decoupled from the TTY / terminal session.
+   - Stream Redirection:
+     * `stdout` and `stderr` are continuously piped into `~/.speiihosting/logs/<name>.log` managed by an automatic 5 MB rotating file handler. Prevents disk exhaustion while keeping full error history.
+     * Closing the terminal never breaks pipes (`SIGPIPE`).
+   - RESULT:
+     Users can open Terminal or CMD, run `speiihos host-front` or `speiihos host-back`, 
+     and immediately CLOSE the terminal window, quit VS Code, or shut Command Prompt. 
+     All websites and services CONTINUE RUNNING in the background 24/7!
+
+================================================================================
+[10] SERVICE LIFECYCLE MANAGEMENT (START / STOP / RESTART)
+================================================================================
+Lifecycle controls mirror `systemctl` and `pm2`:
+
+1. Per-Site Controls:
+   - `speiihos start <name>`: Boots up the service and activates its routing.
+   - `speiihos stop <name>`: Pauses the service (stops backend process / disables vhost).
+   - `speiihos restart <name>`: Restarts backend process and reloads Nginx.
+   - `speiihos logs <name>`: Tails live logs for that specific site.
+
+2. Global Server Controls:
+   - `speiihos service start`: Starts the master supervisor, tunnel, and Nginx.
+   - `speiihos service stop`: Shuts down the master supervisor, tunnel, and all sites.
+================================================================================
+[11] DATA PERSISTENCE & STATE MANAGEMENT (`~/.speiihosting/`)
+================================================================================
+How Speii remembers configurations, running services, and state across reboots:
+
+1. STORAGE LOCATION:
+   All persistent state is stored in the user's home directory:
+   - Linux & macOS: `~/.speiihosting/`
+   - Windows 10 & 11: `%USERPROFILE%\.speiihosting\` (e.g. `C:\Users\<Username>\.speii\`)
+   (Does not require administrator/root permissions to read/write state).
+
+2. DIRECTORY STRUCTURE:
+   ~/.speiihosting/  (or %USERPROFILE%\.speiihosting\)
+   ├── bin/                 # Auto-installed binaries on Windows (nginx, cloudflared)
+   ├── config.json          # Global settings (Cloudflare token, tunnel ID, domain, flags)
+   ├── services.json        # Registry of all hosted frontend, backend & bot sites
+   ├── tunnel.yml           # Cloudflare Tunnel ingress configuration
+   ├── pids/                # Runtime PID files for active backend & bot processes
+   │   └── api.pid
+   ├── sites/               # Isolated live deployments and MAX 1 previous backup
+   │   └── portfolio/
+   │       ├── live/        # Currently active live version
+   │       └── previous/    # Single last stable version for instant rollback (never multiple versions!)
+   └── logs/                # Size-capped rotating logs per service (strict 5 MB limit!)
+       ├── portfolio.log     # Frontend static request logs / app logs
+       ├── api.log           # Backend service stdout / stderr
+       ├── telegram-bot.log  # Bot worker console output
+       ├── nginx_access.log  # Full Nginx HTTP request logs (IP, path, status, latency)
+       ├── nginx_error.log   # Nginx gateway & reverse proxy errors
+       └── speii-daemon.log  # Supervisor daemon events
+   (NOTE: Strict 5 MB rotation cap per log file prevents runaway disk bloat while retaining ~50,000 lines of history!).
+
+3. GLOBAL CONFIG FILE (`~/.speiihosting/config.json`):
+   ```json
+   {
+     "cloudflare_account_id": "ab12cd34ef56...",
+     "cloudflare_api_token": "secret_token_here",
+     "tunnel_id": "7b89c0de-1234-4567-89ab-cdef01234567",
+     "default_domain": "mydevsite.com",
+     "sleep_prevent": false,
+     "autostart": true
+   }
+   ```
+
+4. SERVICE REGISTRY FILE (`~/.speiihosting/services.json`):
+   This file tracks every site and whether it should be running:
+   ```json
+   {
+     "portfolio": {
+       "name": "portfolio",
+       "type": "frontend",
+       "subdomain": "portfolio",
+       "full_domain": "portfolio.mydevsite.com",
+       "path": "/Users/mac/projects/my-portfolio/dist",
+       "status": "running",
+       "autostart": true,
+       "created_at": "2026-10-18T20:00:00Z"
+     },
+     "api": {
+       "name": "api",
+       "type": "backend",
+       "subdomain": "api",
+       "full_domain": "api.mydevsite.com",
+       "path": "/Users/mac/projects/my-api",
+       "port": 8000,
+       "command": "python3 -m uvicorn main:app --port 8000",
+       "status": "running",
+       "autostart": true,
+       "last_pid": 48291,
+       "created_at": "2026-10-18T20:15:00Z"
+     }
+   }
+   ```
+
+5. HOW RESTORATION ON REBOOT WORKS:
+   - When the PC turns on, the system daemon (`systemd` / `launchd` / Windows Service) launches `speiihos daemon`.
+   - The daemon reads `services.json`.
+   - For every entry where `"autostart": true` and `"status": "running"`:
+     * Frontend: Ensures `<name>.conf` is enabled in Nginx.
+     * Backend: Spawns the command (e.g. `python -m uvicorn...`) in the background, 
+       saves the new PID, and starts health monitoring.
+   - Starts `cloudflared` tunnel and reloads Nginx.
+   - Everything is restored 100% automatically to the state before the PC was shut down!
+
+================================================================================
+[12] NGINX CONFIGURATION MANAGEMENT & SAFETY ARCHITECTURE
+================================================================================
+How Speii manages Nginx files cleanly without breaking existing system configs:
+
+1. ISOLATED CONFIG DIRECTORY:
+   - Speii does NOT overwrite the main `nginx.conf`.
+   - During `speiihos init`, it adds a single safe include directive to `nginx.conf`:
+     * Linux: `include /etc/nginx/speiihosting.d/*.conf;`
+     * macOS: `include /opt/homebrew/etc/nginx/speiihosting.d/*.conf;`
+     * Windows 10 & 11: `include C:/Users/<User>/.speiihosting/bin/nginx/conf/speiihosting.d/*.conf;`
+   - All Speii-generated configs live exclusively in the `speiihos.d/` directory.
+
+2. FILE NAMING & STATE MANAGEMENT:
+   - Active Site:   `/etc/nginx/speiihosting.d/portfolio.conf`
+     -> Read by Nginx, traffic routed normally.
+   - Stopped Site:  `/etc/nginx/speiihosting.d/portfolio.conf.disabled`
+     -> Renamed with `.disabled` suffix when `speiihos stop portfolio` is run. 
+        Nginx's `*.conf` glob ignores it, taking the site offline cleanly.
+   - Restarted Site: Renamed back to `portfolio.conf`.
+   - Removed Site:  File is deleted completely from disk.
+
+3. ZERO-DOWNTIME SAFE ATOMIC RELOAD PATTERN:
+   Whenever adding, editing, or deleting a site:
+   - Step 1 (Generate): Speii renders the new config to a temporary file (`/tmp/speiihosting_temp.conf`).
+   - Step 2 (Deploy): Copies the file to `/etc/nginx/speiihosting.d/<name>.conf`.
+   - Step 3 (Validate): Runs `nginx -t` in the background to test syntax and paths.
+   - Step 4 (Decision):
+     * If `nginx -t` PASSES: Runs `nginx -s reload` (hot-reload with zero downtime).
+     * If `nginx -t` FAILS: Immediately deletes the temporary file or restores the 
+       backup, aborts the reload, and alerts the user. Existing live sites are NEVER 
+       disturbed or knocked offline!
+
+================================================================================
+[13] SAFE CODE UPDATES & ATOMIC DEPLOYMENT (`speiihos deploy`)
+================================================================================
+CRITICAL DESIGN REQUIREMENT:
+Developers frequently use editor auto-save, test broken code, and experiment in 
+their local project folders. If the live server pointed directly to their working 
+directory, an auto-save or unfinished edit could break the live site!
+
+SOLUTION: ISOLATED LIVE STAGING ARCHITECTURE
+Speii completely separates the developer's Working Directory from the Live 
+Production Directory.
+
+1. DIRECTORY SEPARATION:
+   - Developer Working Directory:
+     `~/projects/my-app/`  <-- Code freely, auto-save on, break things, test locally.
+   - Isolated Speii Live Directory:
+     `~/.speiihosting/sites/<name>/live/`     <-- Live website serves ONLY from here!
+   - Instant Rollback Backup Directory:
+     `~/.speiihosting/sites/<name>/previous/` <-- Stores previous release for instant rollback.
+
+2. THE UNIFIED COMMAND: `speiihos deploy`
+   When the developer finishes their updates and tests them, they simply run:
+     $ speiihos deploy
+   inside their project directory.
+
+   HOW IT WORKS FOR FRONTEND:
+   1. Speii backs up current live files to `~/.speiihosting/sites/<name>/previous/`.
+   2. If a build tool is detected (Vite, React, Vue), Speii runs `npm run build` 
+      (or uses the existing `./dist` folder).
+   3. Atomically copies the built static assets into `~/.speiihosting/sites/<name>/live/`.
+   4. Purges Cloudflare's edge cache automatically so worldwide users see the update.
+   5. Result: Live site is updated instantly with ZERO downtime and ZERO risk from auto-save.
+
+   HOW IT WORKS FOR BACKEND:
+   1. Speii backs up current live files to `~/.speiihosting/sites/<name>/previous/`.
+   2. Syncs code into `~/.speiihosting/sites/<name>/live/` (ignoring `.git`, `__pycache__`).
+   3. Installs new dependencies if `requirements.txt` or `package.json` changed.
+   4. Gracefully restarts the isolated live background service in milliseconds.
+   5. Nginx and Cloudflare tunnel stay connected seamlessly.
+
+3. INSTANT ROLLBACK: `speiihos rollback`
+   If the developer deploys a bug or mistake:
+     $ speiihos rollback <name>
+   Speii swaps the `previous/` version back to `live/` in 1 second, restoring 
+   the last working version immediately!
+
+4. ZERO-WASTE STORAGE ARCHITECTURE (PREVENTING DISK EXHAUSTION):
+   Problem: Continuous deployments and rollback snapshots can quickly consume 
+   gigabytes of disk space on laptops and old PCs.
+   Solution: Strict Storage Safeguards:
+   - Strict Single-Version Rollback Cap (MAX_VERSIONS = 1):
+     Speii ONLY ever preserves exactly ONE previous release in `sites/<name>/previous/`.
+     When a new deployment succeeds, the older `previous/` snapshot is purged and replaced 
+     by the release that was just live. Speii NEVER accumulates historical versions 
+     (`v1`, `v2`, `v3`, etc.).
+   - Aggressive Dependency & Cache Exclusions:
+     During deployment staging and rollback backup creation, Speii strictly ignores 
+     heavy dependencies and caches:
+     * Node.js: `node_modules/`, `.next/cache/`, `.turbo/`, `.nuxt/`
+     * Python: `.venv/`, `venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`
+     * Git / VCS: `.git/`, `.github/`, `.svn/`
+     * Temp / Cache: `*.log`, `tmp/`, `.cache/`
+     Rollback snapshots only store raw source code, assets, and config files 
+     (`package.json`, `requirements.txt`, `.env`). Rollback backup size is capped at 
+     merely a few kilobytes to megabytes instead of gigabytes!
+   - Manual Disk Reclamation (`speiihos clean`):
+     Users can instantly wipe the rollback backup snapshot to free up 100% of backup disk space:
+     $ speiihos clean <name>     # Purges previous/ backup for a specific site
+     $ speiihos clean --all      # Purges all previous/ backups across all sites
+   - Clean Site Deletion:
+     Running `speiihos remove <name>` instantly deletes both `live/` and `previous/` 
+     completely from disk, leaving zero orphaned files.
+
+5. SMART CAPPED LOG ROTATION & LIVE STREAMING ENGINE:
+   Problem:
+   - Unrestricted logs grow into 20 GB - 100 GB over months, exhausting disk space.
+   - On the other hand, in-memory-only logs or tiny 200-line buffers lose crucial error 
+     stack traces if a crash happened hours ago or when the machine reboots.
+   Solution: Size-Capped Automatic Log Rotation + Live Streaming:
+   - Hard Size Cap (5 MB per Log File):
+     * Each hosted site/bot logs to `~/.speiihosting/logs/<name>.log`.
+     * Speii's internal process supervisor utilizes an automatic rotating file handler 
+       with `maxBytes=5_000_000` (5 MB) and `backupCount=1`.
+     * Retains ~50,000 to 100,000 lines of history — plenty of room to diagnose past 
+       errors, trace crashes, and debug issues.
+     * When `<name>.log` reaches 5 MB, it rotates to `<name>.log.1`. When `<name>.log` 
+       reaches 5 MB again, the old `.log.1` is purged and replaced.
+     * HARD DISK CEILING: A service can NEVER exceed 10 MB total on disk, even if it 
+       runs continuously for 5 years!
+   - Real-Time Live Log Streaming (`speiihos logs <name> -f`):
+     * Connects live to the log stream to view console output and incoming requests 
+       in real time (like `pm2 logs` or `tail -f`).
+     * Exiting with `Ctrl+C` leaves the service running unaffected.
+   - Flexible History & Clear Commands:
+     * `speiihos logs <name>`: Shows last 100 lines by default.
+     * `speiihos logs <name> -n 500`: Shows last 500 lines (or any specified count).
+     * `speiihos logs <name> --clear`: Empties the log file back to 0 bytes immediately.
+     * `speiihos clean --logs`: Wipes all service log files to instantly free disk space.
+   - Full Nginx Access & Error Logging (Enabled!):
+     * `access_log ~/.speiihosting/logs/nginx_access.log combined;`
+     * `error_log ~/.speiihosting/logs/nginx_error.log warn;`
+     * Allows developers to see all incoming HTTP web traffic, client IP addresses, 
+       requested paths, HTTP status codes (200, 301, 404, 500, 502), and proxy latency.
+     * View anytime with `speiihos logs nginx` or stream live with `speiihos logs nginx -f`.
+
+   - Log Size Inspection (`speiihos logs size`):
+     * Users can check the exact file size and line count of every log file on disk:
+       $ speiihos logs size
+       ========================================================================
+       LOG FILE                 TYPE              SIZE       LINES
+       ========================================================================
+       portfolio.log            Frontend SPA      1.2 MB     14,200
+       api.log                  Backend Service   3.8 MB     42,100
+       telegram-bot.log         Bot Worker        0.5 MB      6,300
+       nginx_access.log         Nginx HTTP Access 2.1 MB     22,000
+       nginx_error.log          Nginx Gateway     0.1 MB        450
+       speii-daemon.log         Supervisor        0.2 MB      1,800
+       ========================================================================
+       Total Disk Space Used by Logs: 7.9 MB (Safe - within 10 MB per-service limits)
+       ========================================================================
+
+   - Self-Service Log Clearing (`speiihos logs clear`):
+     * Users have 100% control to clear log files whenever they wish:
+       $ speiihos logs clear <name>   # Truncates that service log file back to 0 bytes
+       $ speiihos logs clear nginx    # Truncates Nginx access & error logs to 0 bytes
+       $ speiihos logs clear --all    # Clears all log files across all services and Nginx
+
+================================================================================
+[14] SYSTEM ARCHITECTURE DIAGRAM
+================================================================================
+
+                               +-------------------------------------+
+                               |           CLOUDFLARE EDGE           |
+                               |  - SSL Termination (*.domain.com)   |
+                               |  - DDoS & Bot Protection            |
+                               |  - Global Anycast CDN               |
+                               +-------------------------------------+
+                                                  |
+                                   Encrypted Cloudflare Tunnel
+                                   (Outbound to Cloudflare)
+                                                  |
+                                                  v
++-----------------------------------------------------------------------------------------+
+|                                    USER PC / LAPTOP                                     |
+|                                                                                         |
+|  [ speii CLI & Service Supervisor ]                                                     |
+|    - Persistent State: ~/.speiihosting/config.json & services.json                             |
+|    - Auto-Restores running sites when PC turns back on                                  |
+|                                                                                         |
+|  [ Cloudflare Tunnel Daemon (cloudflared) ]                                             |
+|    - Receives requests for all subdomains and passes to localhost:80                    |
+|                                                                                         |
+|  [ Nginx Virtual Host Router (localhost:80) ]                                          |
+|    - Loads modular configs from: /etc/nginx/speiihosting.d/*.conf                              |
+|    - Safe atomic reload with: nginx -t && nginx -s reload                               |
+|    |                                                                                    |
+|    |---> portfolio.domain.com      ==> [FRONTEND ENGINE] (SHARED PORT 80 - NO CONFLICT)     |
+|    |                                   Root: /home/user/portfolio/dist (Static HTML/JS/CSS) |
+|    |                                                                                        |
+|    |---> portfolio.domain.com/api  ==> [BACKEND ENGINE] -> 127.0.0.1:8000 (ZERO CORS!)      |
++-----------------------------------------------------------------------------------------+
+
+================================================================================
+[15] CLI COMMAND SPECIFICATION
+================================================================================
+
+1. Setup & Environment:
+   - `speiihos doctor`: Checks Nginx, Python, cloudflared, Cloudflare account; auto-installs.
+   - `speiihos config`: Interactive login and domain setup for Cloudflare.
+
+2. Hosting:
+   - `speiihos host-front`:
+     Flags: `--subdomain <name>`, `--dir <path>`, `--domain <root_domain>`
+     (Publishes static frontends React/Vue/HTML with HTTPS and Cloudflare Tunnel).
+   - `speiihos host-dynamic` (alias: `host-app`):
+     Flags: `--subdomain <name>`, `--port <number>`, `--run "<command>"`, `--domain <root_domain>`
+     (Publishes full-stack dynamic SSR web apps like Next.js, Django, Laravel, Nuxt with domain & SSL).
+   - `speiihos host-back`:
+     Flags: `--port <number>` (required), `--name <name>`, `--run "<command>"`
+     (Runs backend purely as a 24/7 background service on 127.0.0.1. Zero domains or subdomains!).
+   - `speiihos host-bot`:
+     Flags: `--name <name>`, `--run "<command>"`, optional `--webhook --port <number>`
+     (Runs Telegram/Discord bots 24/7 in background with auto-restart. Zero ports/domains needed for polling!).
+
+3. Deployment & Updates:
+   - `speiihos deploy`: Run inside project folder to publish code updates to live server.
+   - `speiihos rollback <name>`: Instantly reverts the live server to the previous release.
+   - `speiihos clean <name>`: Purges previous rollback backup for a site to free disk space.
+   - `speiihos clean --all`: Purges all rollback backups across all hosted sites.
+
+4. Service Lifecycle (Start / Stop / Restart):
+   - `speiihos start <name>`: Starts a stopped frontend or backend service.
+   - `speiihos stop <name>`: Pauses/stops a running frontend or backend service.
+   - `speiihos restart <name>`: Restarts a specific service and reloads Nginx.
+   - `speiihos service start`: Starts the master tunnel and Nginx daemon.
+   - `speiihos service stop`: Shuts down the master tunnel and Nginx daemon.
+
+5. Monitoring & Management:
+   - `speiihos list`: Displays all active frontend and backend hosted sites, paths/ports, and status.
+   - `speiihos remove <name>`: Permanently deletes vhost, removes Cloudflare DNS entry, kills process.
+   - `speiihos logs <name>`: Displays recent logs (supports `-n <lines>`, `-f` for live stream).
+   - `speiihos logs nginx`: Displays Nginx HTTP access and error logs.
+   - `speiihos logs size`: Displays interactive table of all log files and their disk sizes.
+   - `speiihos logs clear <name>`: Clears a specific service's log file back to 0 bytes.
+   - `speiihos logs clear nginx`: Clears Nginx access and error logs.
+   - `speiihos logs clear --all`: Wipes all log files across all services and Nginx.
+   - `speiihos purge <name>`: Purges Cloudflare edge cache for fresh frontend deployment.
+   - `speiihos sleep-prevent`: Configures OS power settings so laptop doesn't sleep when lid is closed.
+
+================================================================================
+[16] REVISED IMPLEMENTATION ROADMAP & PYTHON PROJECT STRUCTURE
+================================================================================
+
+PROJECT CODEBASE STRUCTURE:
+speiihosting/
+├── pyproject.toml             # Build system, dependencies (typer, rich, psutil, pydantic, httpx)
+├── README.md                  # Project introduction & quickstart
+├── plan.txt                   # Complete architectural specification
+├── guice.txt                  # User tutorial & guide
+└── src/
+    └── speiihosting/
+        ├── __init__.py        # Package version & metadata
+        ├── cli.py             # Typer CLI entrypoint (`speiihos`)
+        ├── config.py          # Pydantic models for config.json & services.json
+        ├── doctor.py          # Environment check & auto-installer (Nginx, cloudflared, Python)
+        ├── cloudflare.py      # Cloudflare API client (httpx) for tunnels & DNS
+        ├── nginx.py           # Nginx vhost templates & atomic reload validation
+        ├── process.py         # Subprocess daemonizer (detached process) & psutil monitor
+        └── power.py           # Laptop lid-close sleep prevention (Windows powercfg / Mac pmset)
+
+Phase 1: Project Scaffolding & Doctor Engine
+  - Initialize `pyproject.toml` with dependencies (`typer[all]`, `psutil`, `pydantic`, `httpx`).
+  - Create `speiihos` CLI entrypoint in `src/speiihosting/cli.py`.
+  - Build `doctor.py` platform detection and package manager abstraction (winget, brew, apt).
+  - Implement interactive Cloudflare token verification in `cloudflare.py`.
+
+Phase 2: Port Registry & Service Manager
+  - Port scanner and registry database (`~/.speiihosting/registry.json`).
+  - Auto-assignment for conflicting backend ports.
+  - Service lifecycle daemon (start/stop/restart logic for Linux systemd / macOS launchd).
+
+Phase 3: Frontend Hosting Engine
+  - Static file analyzer (detects `dist/`, `build/`, `out/`, `index.html`).
+  - Nginx SPA template generator with gzip, caching, and dotfile security.
+  - Shared port 80 virtual host manager.
+
+Phase 4: Backend Service Engine
+  - Process supervisor (runs Python/Node apps in background, auto-restart on crash).
+  - Internal loopback proxy binding (connects frontend to backend on 127.0.0.1).
+  - Dynamic port binding without domains.
+
+Phase 5: Cloudflare Tunnel & Ingress Automation
+  - Programmatic creation and configuration of Cloudflare tunnels (for frontends).
+  - Automated DNS CNAME record injection via Cloudflare API.
+  - Wildcard / Multi-host routing.
+
+Phase 6: Laptop / Old PC Server & Cross-Platform Polish
+  - Windows 10 & 11: Windows Service integration, powercfg lid policy, and winget support.
+  - Linux: Lid-close power policy (systemd logind) and systemd service.
+  - macOS: pmset lid policy and launchd agent.
+  - Auto-start on machine boot across all OSes.
+
+================================================================================
+[17] COMPLETE USER FLOW & STEP-BY-STEP JOURNEY
+================================================================================
+
+What the user needs beforehand:
+1. An old laptop, PC, or Mac (Windows 10, Windows 11, macOS, Linux) connected to the internet.
+2. A free Cloudflare account with a domain added (nameservers pointed to Cloudflare).
+3. Their project code (Frontend and/or Backend).
+
+--------------------------------------------------------------------------------
+STEP 1: Download & Install Tool
+--------------------------------------------------------------------------------
+Users can install Speii through whichever package manager they prefer:
+
+Option A: via NPM (Node.js ecosystem)
+  $ npm install -g speiihosting
+  (Or run directly without installing: `npx speiihos init`)
+
+Option B: via PIP (Python ecosystem)
+  $ pip install speiihosting
+  (Or using pipx: `pipx install speiihosting`)
+
+Option C: via Standalone Installer (No Node or Python required)
+  - On Windows 10 & 11 (PowerShell):
+    > irm https://get.speiihosting.io.ps1 | iex
+    (Or `winget install speiihosting`)
+  - On macOS & Linux (Terminal):
+    $ curl -fsSL https://get.speiihosting.io | bash
+
+--------------------------------------------------------------------------------
+STEP 2: First-Time Setup & Doctor (`speiihos init`)
+--------------------------------------------------------------------------------
+The user runs:
+  $ speiihos init
+
+What the tool does:
+1. Checks dependencies:
+   - Nginx installed? (If NO -> Auto-installs via winget/zip on Windows, brew/apt on Mac/Linux).
+   - Python installed? (If NO -> Auto-installs).
+   - Cloudflared installed? (If NO -> Auto-downloads & installs binary/service).
+2. Cloudflare Setup Wizard:
+   - "Enter Cloudflare API Token (or press Enter to open browser login)":
+   - "Found Domain: mydevdomain.com. Use this domain? [Y/n]: Y"
+   - Automatically provisions a named tunnel: `speiihosting-home-server`.
+   - Starts the background services (Nginx + Cloudflare Tunnel).
+   - Prompt: "Setup laptop to stay awake when lid is closed? [Y/n]: Y"
+3. Output: "Ready to host websites!"
+
+--------------------------------------------------------------------------------
+STEP 3: Hosting a Frontend Website (`speiihos host-front`)
+--------------------------------------------------------------------------------
+The user navigates to their React, Vue, or static site folder:
+  $ cd ~/projects/my-portfolio
+  $ npm run build
+  $ speiihos host-front --subdomain portfolio
+
+What happens automatically:
+1. Speii scans the working folder and detects `./dist/index.html`.
+2. Copies files to isolated live staging: `~/.speiihosting/sites/portfolio/live/`.
+3. Checks port registry (uses shared Nginx port 80 - no port conflicts!).
+4. Generates Nginx configuration for `portfolio.mydevdomain.com` with SPA routing.
+5. Auto-injects Cloudflare DNS CNAME record: `portfolio.mydevdomain.com` -> Tunnel.
+6. Reloads Nginx.
+7. Terminal Output:
+   ====================================================
+   🎉 Your Frontend is LIVE!
+   URL:     https://portfolio.mydevdomain.com
+   Serving: ~/.speiihosting/sites/portfolio/live/
+   Source:  /Users/mac/projects/my-portfolio
+   Status:  Background Service Active (Auto-restart on boot)
+   ====================================================
+
+--------------------------------------------------------------------------------
+STEP 4: Bringing Up a Backend Service (`speiihos host-back`) - ZERO DOMAIN NEEDED!
+--------------------------------------------------------------------------------
+The backend needs NO domain and NO subdomain. It simply runs as a 24/7 background 
+service and lets the frontend communicate with it.
+
+The user navigates to their FastAPI, Node.js, or backend folder:
+  $ cd ~/projects/my-api
+  $ speiihos host-back --port 8000
+
+What happens automatically:
+1. Checks if port 8000 is open (warns if collision, suggests next port).
+2. Copies code to isolated live staging: `~/.speiihosting/sites/api/live/`.
+3. Spawns backend as a background service (auto-restarts on crash, auto-boots on reboot).
+4. Connects local Nginx so the frontend can communicate with it internally.
+5. Terminal Output:
+   ====================================================
+   🚀 Backend Service is ACTIVE!
+   Target:  http://127.0.0.1:8000 (Local Service)
+   Domain:  NONE NEEDED (Frontend communicates directly!)
+   Status:  Background Service Active (Auto-restart on crash)
+   ====================================================
+
+--------------------------------------------------------------------------------
+STEP 5: Hosting a 24/7 Bot (Telegram / Discord) (`speiihos host-bot`)
+--------------------------------------------------------------------------------
+The user navigates to their Telegram, Discord, or automation bot folder:
+  $ cd ~/projects/my-telegram-bot
+  $ speiihos host-bot
+
+What happens automatically:
+1. Detects bot entrypoint (`bot.py` or `index.js`).
+2. Reads `.env` secrets safely (e.g. `TELEGRAM_BOT_TOKEN`).
+3. Copies code to isolated live staging: `~/.speiihosting/sites/my-telegram-bot/live/`.
+4. Spawns as a 24/7 detached daemon (auto-restarts on crash or network loss).
+5. Terminal Output:
+   ====================================================
+   🤖 Bot Service is ACTIVE!
+   Service Name: my-telegram-bot
+   Mode:         Long-Polling / WebSockets (Outbound)
+   Status:       Background Service Active (Auto-restart on crash)
+   ====================================================
+
+--------------------------------------------------------------------------------
+STEP 6: Updating Code Safely (`speiihos deploy`)
+--------------------------------------------------------------------------------
+The developer edits code freely in their project folder (auto-save on, testing).
+When finished and ready to update the live site:
+  $ cd ~/projects/my-portfolio (or ~/projects/my-api)
+  $ speiihos deploy
+
+What happens automatically:
+1. Backs up current live release to `previous/` for instant rollback.
+2. Atomically replaces `live/` files with the newly updated build or backend code.
+3. If frontend: auto-purges Cloudflare edge cache.
+4. If backend: restarts the live background process in milliseconds.
+5. Output: 🚀 Updated successfully with ZERO downtime!
+
+--------------------------------------------------------------------------------
+STEP 7: Daily Management & Maintenance
+--------------------------------------------------------------------------------
+Check what is running:
+  $ speiihos list
+    Name        Type      Port/Target             URL                               Status
+    portfolio   Frontend  ~/.speiihosting/sites/port...  https://portfolio.mydevdomain.com  [RUNNING]
+    api         Backend   http://127.0.0.1:8000   Local Service (No domain)          [RUNNING]
+
+Rollback a bad deployment:
+  $ speiihos rollback portfolio   # Restores previous stable release in 1 second
+
+Temporarily stop or start a site:
+  $ speiihos stop portfolio       # Takes portfolio offline immediately
+  $ speiihos start portfolio      # Brings portfolio back online
+
+View and follow logs (Nginx + Apps, capped at 5 MB rotation):
+  $ speiihos logs api             # View last 100 lines of API logs
+  $ speiihos logs api -n 500      # View last 500 lines of history
+  $ speiihos logs api -f          # Stream live logs in real time (press Ctrl+C to exit)
+  $ speiihos logs nginx           # View incoming Nginx HTTP access & error logs
+  $ speiihos logs nginx -f        # Stream live web visitor traffic
+
+Check log file sizes:
+  $ speiihos logs size            # Inspect exact file size of every log on disk
+
+Clear logs manually (Self-service):
+  $ speiihos logs clear api       # Clear api logs back to 0 bytes immediately
+  $ speiihos logs clear nginx     # Clear Nginx access and error logs
+  $ speiihos logs clear --all     # Clear all logs across all sites
+
+Free up rollback backup space:
+  $ speiihos clean api            # Purges the rollback backup for api
+
+Close the laptop lid and put it on a shelf:
+  The laptop continues hosting 24/7 silently!
+
+

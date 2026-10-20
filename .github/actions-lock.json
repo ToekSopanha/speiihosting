@@ -1,0 +1,18 @@
+{
+  "actions/checkout": {
+    "tag": "v7.0.1",
+    "commit": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+  },
+  "actions/setup-python": {
+    "tag": "v7.0.0",
+    "commit": "5fda3b95a4ea91299a34e894583c3862153e4b97"
+  },
+  "actions/setup-node": {
+    "tag": "v7.1.0",
+    "commit": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+  },
+  "astral-sh/setup-uv": {
+    "tag": "v10.3.0",
+    "commit": "1c37ad07a6a961277cf70c0d37d6f313000f5884"
+  }
+}

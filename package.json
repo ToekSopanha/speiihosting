@@ -1,0 +1,10 @@
+{
+  "name": "speiihosting",
+  "version": "0.2.0",
+  "description": "Cross-platform self-hosting CLI powered by the SpeiiHosting Python core",
+  "license": "MIT",
+  "bin": {"speiihos": "bin/speiihos.cjs", "speiihosting": "bin/speiihos.cjs"},
+  "files": ["bin/", "src/speiihosting/*.py", "src/speiihosting/binaries.json", "pyproject.toml", "README.md", "documentation.md", "plan.txt", "LICENSE"],
+  "engines": {"node": ">=18"},
+  "scripts": {"test": "node --test tests/npm.test.cjs"}
+}

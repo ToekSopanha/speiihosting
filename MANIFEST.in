@@ -1,0 +1,8 @@
+include documentation.md
+include plan.txt
+include uv.lock
+include requirements-dev.lock
+include package.json
+recursive-include .github *.yml *.json
+recursive-include scripts *.sh *.ps1
+recursive-include tests *.py *.cjs
