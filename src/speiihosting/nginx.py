@@ -103,7 +103,7 @@ class Nginx:
         # This is the root cause of the Windows "CreateFile … logs/error.log …
         # The system cannot find the path specified" error.
         for directory in (
-            "logs",           # nginx startup error log lives here under the prefix
+            "logs",  # nginx startup error log lives here under the prefix
             "client_temp",
             "proxy_temp",
             "fastcgi_temp",

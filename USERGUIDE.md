@@ -2,7 +2,7 @@
 
 **Complete Step-by-Step Tutorial for Self-Hosting**
 
-Version 0.3.4 • Last Updated: 2026-10-20
+Version 0.3.5 • Last Updated: 2026-10-20
 
 ---
 
