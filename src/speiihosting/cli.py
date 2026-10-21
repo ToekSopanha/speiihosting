@@ -8,7 +8,6 @@ import shutil
 import socket
 import subprocess
 import time
-from collections import deque
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Annotated
@@ -22,6 +21,7 @@ from rich.table import Table
 from . import __version__, cloudflare, doctor, power, startup
 from .config import HealthCheck, Resources, Service, SpeiiError
 from .inspection import describe
+from .log_reader import LogReader
 from .manager import Manager
 from .nginx import Nginx
 from .process import alive, ensure_daemon, stop_daemon
@@ -673,10 +673,20 @@ def project_validate(json_output: bool = typer.Option(False, "--json")):
 
 @app.command()
 @guarded
-def link(frontend: str, backend: str, prefix: str = "/api"):
-    """Route a frontend path to a local backend (strips the path prefix)."""
-    Manager(Store()).link(frontend, backend, prefix)
-    console.print(f"Linked {frontend}{prefix} → {backend}", markup=False)
+def link(
+    frontend: str,
+    backend: str,
+    prefix: str = "/api",
+    strip_prefix: bool = typer.Option(
+        True,
+        "--strip-prefix/--preserve-prefix",
+        help="Strip the public prefix, or preserve it for backend routes such as /api/projects.",
+    ),
+):
+    """Route a frontend path to a backend; use --preserve-prefix if it expects that prefix."""
+    Manager(Store()).link(frontend, backend, prefix, strip_prefix=strip_prefix)
+    behavior = "prefix stripped" if strip_prefix else "prefix preserved"
+    console.print(f"Linked {frontend}{prefix} → {backend} ({behavior})", markup=False)
 
 
 @app.command()
@@ -754,31 +764,24 @@ def logs(
     if clear:
         clear_logs(paths)
         return
-    offsets: dict[Path, tuple[int, int]] = {}
-    for path in paths:
-        if not path.exists():
-            continue
-        if len(paths) > 1:
-            console.print(path.name, style="bold", markup=False)
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            console.print(
-                "".join(deque(handle, maxlen=lines)), end="", markup=False, soft_wrap=True
-            )
-            offsets[path] = (handle.tell(), path.stat().st_ino)
+    readers = [LogReader(path) for path in paths]
+    for reader in readers:
+        text = reader.read_tail(lines)
+        if text:
+            if len(paths) > 1:
+                console.print(reader.path.name, style="bold", markup=False)
+            console.print(text, end="", markup=False, soft_wrap=True)
     if follow:
+        Console(stderr=True).print(
+            f"Following logs for {name}. Press Ctrl+C to stop; the service keeps running.",
+            markup=False,
+        )
         try:
             while True:
-                for path in paths:
-                    if not path.exists():
-                        continue
-                    offset, inode = offsets.get(path, (0, 0))
-                    stat = path.stat()
-                    if stat.st_ino != inode or stat.st_size < offset:
-                        offset = 0
-                    with path.open("r", encoding="utf-8", errors="replace") as handle:
-                        handle.seek(offset)
-                        console.print(handle.read(), end="", markup=False, soft_wrap=True)
-                        offsets[path] = (handle.tell(), stat.st_ino)
+                for reader in readers:
+                    text = reader.read_new()
+                    if text:
+                        console.print(text, end="", markup=False, soft_wrap=True)
                 time.sleep(0.2)
         except KeyboardInterrupt:
             pass

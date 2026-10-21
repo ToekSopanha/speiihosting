@@ -110,6 +110,7 @@ class Service(BaseModel):
     generation: int = 1
     backend: str | None = None
     api_prefix: str = "/api"
+    api_strip_prefix: bool = True
     env_allow: list[str] = Field(default_factory=list)
     health: HealthCheck | None = None
     isolation: Literal["process", "podman"] = "process"

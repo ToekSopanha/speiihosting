@@ -112,16 +112,23 @@ def test_nginx_validation_failure_restores_files(store, monkeypatch, tmp_path):
     assert not (nginx.sites / "site.conf").exists()
 
 
-def test_nginx_spa_backend_binding_and_websockets(store, tmp_path):
+@pytest.mark.parametrize("strip_prefix", [True, False])
+def test_nginx_spa_backend_binding_and_websockets(store, tmp_path, strip_prefix):
     front = Service(
-        name="web", type="frontend", source=tmp_path, full_domain="web.example.com", backend="api"
+        name="web",
+        type="frontend",
+        source=tmp_path,
+        full_domain="web.example.com",
+        backend="api",
+        api_strip_prefix=strip_prefix,
     )
     back = Service(name="api", type="backend", source=tmp_path, port=8000)
     rendered = render_site(front, {"web": front, "api": back}, store)
     assert f"127.0.0.1:{store.settings().nginx_port};" in rendered
     assert "try_files $uri $uri/ /index.html" in rendered
     assert "location /api/" in rendered
-    assert "proxy_pass http://speii_8000/;" in rendered
+    target = "http://speii_8000/" if strip_prefix else "http://speii_8000"
+    assert f"proxy_pass {target};" in rendered
     assert "Upgrade $http_upgrade" in rendered
     assert "deny all" in rendered
     back.status = "stopped"

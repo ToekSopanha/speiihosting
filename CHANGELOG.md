@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.6]
+
+### Fixed
+- Live log following retries when rotation temporarily removes a log, detects clear-and-regrow changes, and preserves UTF-8/CRLF sequences split between polls. Follow mode displays an explicit status message.
+- Windows backend, bot and infrastructure processes use a windowless console so nested npm/CMD children do not open a terminal window. Build/dependency commands also suppress console windows while retaining captured logs.
+
+### Added
+- `speiihos link --preserve-prefix` forwards the public API prefix to backends that already define routes such as `/api/projects`. Existing links keep stripping the prefix by default; `--strip-prefix` explicitly restores that behavior.
+- Route inspection reports `strip_prefix`, and the selected mode persists across deploys, rollbacks and restarts.
+
 ## [0.3.5] - 2026-10-20
 
 **Major security, reliability, and usability revision**

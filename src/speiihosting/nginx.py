@@ -49,7 +49,12 @@ def render_site(service: Service, services: dict[str, Service], store: Store) ->
         prefix = service.api_prefix
         if backend.status == "running":
             text += f"    location = {prefix} {{ return 308 {prefix}/; }}\n"
-            text += proxy(backend.port, prefix + "/", strip=True, streaming=backend.streaming)
+            text += proxy(
+                backend.port,
+                prefix + "/",
+                strip=service.api_strip_prefix,
+                streaming=backend.streaming,
+            )
         else:
             text += f"    location {prefix} {{ return 503; }}\n"
     if service.type == "frontend":

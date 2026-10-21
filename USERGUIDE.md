@@ -2,7 +2,7 @@
 
 **Complete Step-by-Step Tutorial for Self-Hosting**
 
-Version 0.3.5 • Last Updated: 2026-10-20
+Version 0.3.6 • Last Updated: 2026-10-20
 
 ---
 
@@ -817,6 +817,18 @@ https://portfolio.example.com/api/users
   → proxies to → http://127.0.0.1:8000/users
 ```
 
+If your backend routes already start with `/api`, preserve that prefix:
+
+```bash
+speiihos link portfolio api --prefix /api --preserve-prefix
+```
+
+Now `https://portfolio.example.com/api/users` reaches
+`http://127.0.0.1:8000/api/users`. Your frontend can keep calling `/api/users`.
+This also applies to nested routes such as `/api/auth/login` and `/api/download/cv`.
+The setting survives deploys and restarts. Use `--strip-prefix` to return to
+the default behavior, and `speiihos inspect portfolio` to check `strip_prefix`.
+
 **Benefits:**
 - ✓ Same origin (no CORS issues)
 - ✓ Shared frontend HTTPS certificate
@@ -1384,6 +1396,15 @@ speiihos logs api -f
 
 # Press Ctrl+C to stop (service keeps running!)
 ```
+
+The viewer prints a following status message and waits for new output, including
+when the log file has not been created yet. It continues across log rotation and
+clearing. Add `-n 0` to show only output written after you start following.
+Without `-f`, the command prints recent logs and exits.
+
+Runtime logs contain what the application writes to stdout/stderr. An API that
+does not log requests can remain quiet while serving traffic. Use
+`speiihos logs nginx -f` to follow HTTP requests reaching your hosted website.
 
 #### Build Logs vs Runtime Logs
 

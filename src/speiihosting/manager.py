@@ -406,7 +406,7 @@ class Manager:
                 raise
             return service
 
-    def link(self, frontend: str, backend: str, prefix: str) -> None:
+    def link(self, frontend: str, backend: str, prefix: str, *, strip_prefix: bool = True) -> None:
         with self.lock():
             services = self.store.services()
             front = self.store.resolve(frontend)
@@ -414,6 +414,7 @@ class Manager:
             if front.type not in {"frontend", "dynamic"} or back.type != "backend":
                 raise SpeiiError("Link requires a frontend/dynamic site and a backend.")
             front.backend, front.api_prefix = back.name, prefix
+            front.api_strip_prefix = strip_prefix
             services[front.name] = front
             self.routing(services, self.store.services(), remote=False)
             self.store.save_services(services)

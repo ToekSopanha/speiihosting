@@ -24,6 +24,7 @@ def describe(store: Store, service: Service, *, disk: bool = True) -> dict:
         [
             {
                 "path": service.api_prefix,
+                "strip_prefix": service.api_strip_prefix,
                 "backend": service.backend,
                 "public": bool(service.full_domain),
             }
@@ -36,6 +37,7 @@ def describe(store: Store, service: Service, *, disk: bool = True) -> dict:
             {
                 "frontend": front.name,
                 "path": front.api_prefix,
+                "strip_prefix": front.api_strip_prefix,
                 "public": bool(front.full_domain),
                 "url": f"https://{front.full_domain}{front.api_prefix}"
                 if front.full_domain

@@ -1,6 +1,6 @@
 {
   "name": "speiihosting",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Cross-platform self-hosting CLI powered by the SpeiiHosting Python core",
   "license": "MIT",
   "bin": {"speiihos": "dist/speiihos.cjs", "speiihosting": "dist/speiihos.cjs"},

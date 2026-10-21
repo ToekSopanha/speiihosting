@@ -1,4 +1,7 @@
 import io
+import json
+import os
+import subprocess
 import sys
 import time
 from types import SimpleNamespace
@@ -8,7 +11,15 @@ import pytest
 
 from speiihosting.config import SpeiiError
 from speiihosting.manager import Manager
-from speiihosting.process import Worker, alive, close_logger, logger_for, pump, stop_daemon
+from speiihosting.process import (
+    Worker,
+    alive,
+    close_logger,
+    logger_for,
+    pump,
+    run_logged,
+    stop_daemon,
+)
 
 
 def eventually(predicate, timeout=10):
@@ -70,6 +81,75 @@ def test_backend_has_no_cloudflare_dependency_and_restores_after_daemon_restart(
     assert not alive(store, service.name)
     manager.lifecycle(str(free_port), "start")
     assert httpx.get(f"http://127.0.0.1:{free_port}", trust_env=False).text == "local API"
+
+
+def test_backend_survives_the_hosting_cli_exiting(store, tmp_path, free_port, http_app):
+    source = tmp_path / "background-api"
+    http_app(source, body="still running")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "speiihosting",
+            "host-back",
+            "--port",
+            str(free_port),
+            "--no-install",
+        ],
+        cwd=source,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert alive(store, "speii-daemon")
+    assert alive(store, "background-api")
+    assert httpx.get(f"http://127.0.0.1:{free_port}", trust_env=False).text == "still running"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows console APIs")
+@pytest.mark.parametrize("launch", ["worker", "build"])
+def test_windows_batch_children_have_no_visible_console(store, tmp_path, launch):
+    # Exercise cmd -> Python -> Python so a detached parent cannot conceal a
+    # descendant allocating a visible console, as happens with npm.cmd -> node.
+    probe = tmp_path / "console_probe.py"
+    probe.write_text(
+        "import ctypes, json\n"
+        "from ctypes import wintypes\n"
+        "kernel = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+        "kernel.GetConsoleWindow.restype = wintypes.HWND\n"
+        "user = ctypes.WinDLL('user32', use_last_error=True)\n"
+        "user.IsWindowVisible.argtypes = [wintypes.HWND]\n"
+        "user.IsWindowVisible.restype = wintypes.BOOL\n"
+        "window = kernel.GetConsoleWindow()\n"
+        "print(json.dumps({'visible': bool(window and user.IsWindowVisible(window))}), flush=True)\n"
+    )
+    launcher = tmp_path / "launcher.py"
+    launcher.write_text(
+        "import subprocess, sys, time\n"
+        "subprocess.run([sys.executable, 'console_probe.py'], check=True)\n"
+        + ("time.sleep(60)\n" if launch == "worker" else "")
+    )
+    batch = tmp_path / "launch.cmd"
+    batch.write_text(
+        "@echo off\n" + subprocess.list2cmdline([sys.executable, str(launcher)]) + "\n"
+    )
+    command = [str(batch)]
+    log = store.home / "logs/console-test.log"
+    worker = None
+    try:
+        if launch == "worker":
+            worker = Worker(store, "console-test", command, tmp_path, 1)
+            worker.tick()
+            assert not worker.crashed, worker.error
+            eventually(lambda: log.exists() and '"visible"' in log.read_text())
+            assert worker.status()["status"] == "running"
+        else:
+            assert run_logged(command, tmp_path, log) == 0
+        assert json.loads(log.read_text().strip()) == {"visible": False}
+    finally:
+        if worker:
+            worker.stop()
 
 
 def test_failed_deploy_recovers_old_live_release(store, tmp_path):

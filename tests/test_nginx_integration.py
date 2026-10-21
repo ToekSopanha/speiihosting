@@ -19,8 +19,9 @@ NGINX = os.environ.get("SPEII_TEST_NGINX") or shutil.which("nginx")
 pytestmark = pytest.mark.skipif(not NGINX or os.name == "nt", reason="requires POSIX Nginx")
 
 
+@pytest.mark.parametrize("strip_prefix", [True, False])
 def test_real_nginx_spa_proxy_stop_deploy_and_rollback(
-    store, tmp_path, monkeypatch, free_port, http_app
+    store, tmp_path, monkeypatch, free_port, http_app, strip_prefix
 ):
     (store.home / "bin/nginx").symlink_to(NGINX)
     connector = store.home / "bin/cloudflared"
@@ -49,7 +50,7 @@ def test_real_nginx_spa_proxy_stop_deploy_and_rollback(
     manager.host("backend", backend, port=backend_port, install=False)
     front = manager.host("frontend", source, subdomain="web", install=False)
     assert front.backend is None
-    manager.link(front.name, "api", "/api")
+    manager.link(front.name, "api", "/api", strip_prefix=strip_prefix)
     other = manager.host("frontend", source, name="other", subdomain="other", install=False)
     with httpx.Client(
         base_url=f"http://127.0.0.1:{free_port}",
@@ -63,18 +64,22 @@ def test_real_nginx_spa_proxy_stop_deploy_and_rollback(
         assert "immutable" in client.get("/assets/app.1234abcd.js").headers["cache-control"]
         assert "immutable" not in client.get("/assets/logo.svg").headers["cache-control"]
         assert client.get("/assets/logo.svg").headers["x-content-type-options"] == "nosniff"
-        assert client.get("/api/ping").text == "/ping"
+        expected_path = "/ping?limit=2" if strip_prefix else "/api/ping?limit=2"
+        assert client.get("/api/ping?limit=2").text == expected_path
         (source / "index.html").write_text("<h1>release two</h1>")
         assert "release one" in client.get("/").text
         manager.deploy(front.name, install=False)
         assert "release two" in client.get("/").text
+        assert client.get("/api/ping?limit=2").text == expected_path
         manager.deploy(front.name, rollback=True, install=False)
         assert "release one" in client.get("/").text
+        assert client.get("/api/ping?limit=2").text == expected_path
         manager.lifecycle(front.name, "stop")
         assert client.get("/").status_code == 404
         assert (store.home / "nginx/speiihosting.d/web.conf.disabled").exists()
         manager.lifecycle(front.name, "start")
         assert "release one" in client.get("/").text
+        assert client.get("/api/ping?limit=2").text == expected_path
         # A build failure must preserve the serving files and previous release.
         service = store.resolve(front.name)
         service.build_command = '"' + sys.executable + '" -c "raise SystemExit(1)"'

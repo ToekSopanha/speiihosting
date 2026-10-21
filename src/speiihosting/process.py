@@ -61,7 +61,11 @@ def pump(pipe, logger: logging.Logger) -> None:
 
 def detached_flags() -> dict:
     if os.name == "nt":
-        return {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+        # DETACHED_PROCESS leaves console children (npm/cmd/Python launchers)
+        # free to allocate a visible console. CREATE_NO_WINDOW gives the process
+        # a windowless console that its children can inherit. Do not combine the
+        # two flags: Windows ignores CREATE_NO_WINDOW with DETACHED_PROCESS.
+        return {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
     return {"start_new_session": True}
 
 
@@ -75,6 +79,7 @@ def run_logged(command: list[str], cwd: Path, log: Path, env: dict | None = None
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         thread = threading.Thread(target=pump, args=(child.stdout, logger), daemon=True)
         thread.start()

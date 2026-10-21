@@ -1,6 +1,6 @@
 <div align="center">
 
-<!-- version:0.3.5 -->
+<!-- version:0.3.6 -->
 
 # 🚀 SpeiiHosting
 
@@ -132,6 +132,17 @@ speiihos host-back --port 8000 --health-path /health
 speiihos link portfolio api --prefix /api
 # ✅ https://portfolio.yourdomain.com/api → 127.0.0.1:8000
 ```
+
+Links strip the public prefix by default: `/api/projects` reaches `/projects`.
+If your backend already defines `/api/projects`, preserve the prefix:
+
+```sh
+speiihos link portfolio api --prefix /api --preserve-prefix
+# https://portfolio.yourdomain.com/api/projects → 127.0.0.1:8000/api/projects
+```
+
+The frontend can then use relative URLs such as `/api/projects`.
+`speiihos inspect portfolio` reports the link's `strip_prefix` setting.
 
 **24/7 Bot (Telegram, Discord)**
 ```sh
