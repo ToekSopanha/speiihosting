@@ -50,6 +50,8 @@ def describe(store: Store, service: Service, *, disk: bool = True) -> dict:
         "name": service.name,
         "type": service.type,
         "source": str(service.source),
+        "env_file": str(store.env_file(service.name)),
+        "env_file_present": store.env_file(service.name).is_file(),
         "port": service.port,
         "url": f"https://{service.full_domain}" if service.full_domain else None,
         "desired_status": service.status,

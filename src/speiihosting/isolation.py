@@ -41,7 +41,7 @@ class ProcessRuntime:
         self.validate(service)
         live = store.site(service.name) / "live"
         (live.parent / "data").mkdir(exist_ok=True, mode=0o700)
-        return LaunchSpec(command_for(service), live, environment(service, live))
+        return LaunchSpec(command_for(service), live, environment(service, live, store))
 
     def stop(self, store: Store, service: Service) -> None:
         pass
@@ -135,7 +135,7 @@ class PodmanRuntime:
             for key, value in safe_environment(service.env_allow).items()
             if key in service.env_allow
         }
-        app_env.update(app_values(live / ".env"))
+        app_env.update(app_values(live / ".env", store.env_file(service.name)))
         app_env.update(
             HOME="/tmp",
             HOST="0.0.0.0",

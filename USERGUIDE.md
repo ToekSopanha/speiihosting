@@ -2,7 +2,7 @@
 
 **Complete Step-by-Step Tutorial for Self-Hosting**
 
-Version 0.3.6 • Last Updated: 2026-10-20
+Version 0.3.7 • Last Updated: 2026-10-20
 
 ---
 
@@ -803,6 +803,32 @@ speiihos host-back --port 8000 --health-path /health --health-status 200
 
 💡 To expose publicly: speiihos link <frontend> api --prefix /api
 ```
+
+#### Keep Environment Variables Outside the Project
+
+You can keep your backend's environment file outside the project and its releases.
+Copy it to `%USERPROFILE%\.speiihosting\env\<service-name>\.env` on Windows, or
+`~/.speiihosting/env/<service-name>/.env` on macOS/Linux. For example, from the
+backend project folder:
+
+```cmd
+mkdir "%USERPROFILE%\.speiihosting\env\product-lookup-backend"
+copy .env "%USERPROFILE%\.speiihosting\env\product-lookup-backend\.env"
+speiihos host-back --port 3001
+```
+
+The folder name must match the registered service name. Use `--name` when you
+want to choose it explicitly. Hosting prints the environment file path when it
+is present; `speiihos inspect <name>` and `host-back --dry-run --json` also report
+the path and whether the file exists, without displaying values.
+
+Variables in this file override matching keys in the project's `.env`.
+Speiihos-controlled values such as `PORT` and `HOST` retain the hosting settings.
+The file survives deploy, rollback and service removal. Apply edits with
+`speiihos restart <name>`; rebuild with `speiihos deploy <name>` when build-time
+variables change. An existing registered backend uses `deploy` or `restart`
+instead of running `host-back` again. A custom `SPEIIHOSTING_HOME` changes the
+root of the `env` directory too.
 
 #### Step 3: Link to Frontend (Optional)
 

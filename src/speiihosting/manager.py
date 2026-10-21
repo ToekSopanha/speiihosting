@@ -70,7 +70,7 @@ class Manager:
                         if service.build_command
                         else [executable("npm"), "run", "build"]
                     )
-                    run_build(command, workspace, log, environment(service, workspace))
+                    run_build(command, workspace, log, environment(service, workspace, self.store))
                     relative = Path(service.static_dir).relative_to(service.source)
                     output = static_directory(workspace, relative)
                     copy_source(output, release.candidate)
@@ -214,6 +214,7 @@ class Manager:
                         raise SpeiiError("--frontend must identify a frontend or dynamic site.")
                     services[front.name].backend = service.name
             release = Release(self.store.site(service.name))
+            self.store.env_file(service.name).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             (release.site / "data").mkdir(exist_ok=True, mode=0o700)
             promoted = False
             transaction = Transaction(self.store, service, old)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "speiihosting"
-version = "0.3.6"
+version = "0.3.7"
 description = "Cross-platform self-hosting CLI with isolated deployments and Cloudflare Tunnels"
 readme = "README.md"
 requires-python = ">=3.10"

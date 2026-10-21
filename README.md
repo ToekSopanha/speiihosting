@@ -1,6 +1,6 @@
 <div align="center">
 
-<!-- version:0.3.6 -->
+<!-- version:0.3.7 -->
 
 # 🚀 SpeiiHosting
 
@@ -143,6 +143,24 @@ speiihos link portfolio api --prefix /api --preserve-prefix
 
 The frontend can then use relative URLs such as `/api/projects`.
 `speiihos inspect portfolio` reports the link's `strip_prefix` setting.
+
+**Keep a backend's environment file in one place**
+
+Copy your `.env` to `~/.speiihosting/env/<service-name>/.env`. On Windows, run
+these commands from your backend project folder:
+
+```cmd
+mkdir "%USERPROFILE%\.speiihosting\env\product-lookup-backend"
+copy .env "%USERPROFILE%\.speiihosting\env\product-lookup-backend\.env"
+speiihos host-back --port 3001
+```
+
+The folder name must match the service name (from `package.json`, project config,
+or `--name`). Speiihos loads this file automatically for builds and runtime,
+overriding matching variables in the project's `.env`. The file stays in place
+across deploys, rollbacks and service removal. After editing it, run
+`speiihos restart product-lookup-backend`; use `deploy` if a build needs the new values.
+If `SPEIIHOSTING_HOME` is configured, use its `env` folder instead.
 
 **24/7 Bot (Telegram, Discord)**
 ```sh

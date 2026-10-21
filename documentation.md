@@ -77,6 +77,7 @@ The repository has a universal uv.lock and a hashed requirements-dev.lock export
 ```text
 config.json                      version 2 public settings; no hosting tokens
 credentials.json                 private file-backed hosting credentials
+env/<name>/.env                   optional per-service app environment overrides
 services.json                    versioned desired state and runner definitions
 registry.json                    derived port index
 runtime.json                     disposable observed status/metrics
@@ -97,6 +98,8 @@ logs/                            separate bounded worker/build/infrastructure lo
 ```
 
 Settings and service models reject unknown fields/unsupported future versions. Version 1 files are upgraded in memory; `migrate` persists version 2 and separates credentials. Existing recorded API mappings remain intact because their original intent cannot be inferred; review with inspect and remove unwanted mappings with unlink. General configuration output redacts in-memory tokens, and saved config.json contains none.
+
+App environments load the deployed project's `.env`, followed by `env/<service-name>/.env` under the active Store home. The managed file overrides project values and is used for dependency/build commands, native workers and Podman app environments. Inherited allowlisted variables have lower precedence; Speiihos-controlled `HOST`, `PORT` and data-directory settings are applied last. Both files filter reserved hosting credential names, disable dotenv interpolation and accept UTF-8 with or without a BOM. Values are not added to the service registry or inspection/preview output. The managed file remains outside release copies and survives rollback, remove and `--purge-data`; delete it explicitly when its configuration is no longer needed. Changes take effect at restart or deploy, not while a worker is already running. Static build changes require deploy. The per-service folder is created during hosting; it can also be created manually before the first host command.
 
 The file credential backend uses the private root (POSIX 0700) and files (0600). Optional `credential_store=keyring` requires the secrets extra and a supported secure native keyring; plaintext or unavailable providers fail rather than silently weakening storage. Headless environments should keep the private-file provider when a keyring cannot unlock. Switching to keyring saves credentials and publishes the new provider before deleting the old file copy.
 

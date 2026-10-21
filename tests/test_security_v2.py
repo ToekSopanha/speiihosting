@@ -150,6 +150,9 @@ def test_rootless_adapter_hardens_container_and_keeps_secrets_out_of_argv(
     (live / ".env").write_text(
         "APP_SECRET=inside-container\nCONTAINER_HOST=app-value\nPATH=/app/fake-path\n"
     )
+    managed = store.env_file(service.name)
+    managed.parent.mkdir(parents=True)
+    managed.write_text("APP_SECRET=managed-container\nCLOUDFLARE_API_TOKEN=forbidden\n")
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "never-in-container")
     spec = PodmanRuntime().launch(store, service)
     assert "--read-only" in spec.command
@@ -160,11 +163,13 @@ def test_rootless_adapter_hardens_container_and_keeps_secrets_out_of_argv(
         "--memory" in spec.command and "--cpus" in spec.command and "--pids-limit" in spec.command
     )
     assert "inside-container" not in repr(spec.command)
+    assert "managed-container" not in repr(spec.command)
     assert "APP_SECRET" not in spec.env and "CONTAINER_HOST" not in spec.env
     assert spec.env.get("PATH") != "/app/fake-path"
     env_file = Path(spec.command[spec.command.index("--env-file") + 1])
-    assert "APP_SECRET=inside-container" in env_file.read_text()
+    assert "APP_SECRET=managed-container" in env_file.read_text()
     assert "never-in-container" not in env_file.read_text()
+    assert "forbidden" not in env_file.read_text()
     if os.name != "nt":
         assert env_file.stat().st_mode & 0o777 == 0o600
 

@@ -110,6 +110,7 @@ class Store:
                 "pids",
                 "logs",
                 "sites",
+                "env",
                 "nginx",
                 "nginx/logs",
                 "nginx/speiihosting.d",
@@ -212,6 +213,9 @@ class Store:
 
     def site(self, name: str) -> Path:
         return self.home / "sites" / valid_name(name)
+
+    def env_file(self, name: str) -> Path:
+        return self.home / "env" / valid_name(name) / ".env"
 
     def resolve(self, identifier: str | None, cwd: Path | None = None) -> Service:
         services = self.services()

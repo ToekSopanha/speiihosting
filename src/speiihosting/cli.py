@@ -92,6 +92,9 @@ def report(service: Service, json_output: bool = False) -> None:
     else:
         console.print("Outbound worker; no domain or port required.")
     console.print(f"Source: {service.source}", markup=False)
+    env_file = Store(create=False).env_file(service.name)
+    if env_file.is_file():
+        console.print(f"Environment file: {env_file}", markup=False)
     for warning in warnings:
         console.print(warning, style="yellow", markup=False)
     if service.backend:

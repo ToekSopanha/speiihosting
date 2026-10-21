@@ -220,6 +220,8 @@ def preview(store, source: Path, kind: str, values: dict) -> dict:
         "name": name,
         "type": kind,
         "source": str(source),
+        "env_file": str(store.env_file(name)),
+        "env_file_present": store.env_file(name).is_file(),
         "static_output": output,
         "url": url,
         "requested_port": service.port,

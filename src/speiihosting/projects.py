@@ -202,8 +202,10 @@ def run_build(command: list[str], cwd: Path, log: Path, env: dict | None = None)
 def prepare(service: Service, candidate: Path, site: Path, log: Path, install: bool = True) -> None:
     """Build a candidate fully before touching live code or the running process."""
     from .process import environment as process_environment
+    from .storage import Store
 
-    build_env = process_environment(service, candidate)
+    store = Store(site.parent.parent, create=False)
+    build_env = process_environment(service, candidate, store)
     package = manifest(candidate)
     if package and install:
         if service.strict_dependencies and not (candidate / "package-lock.json").is_file():
@@ -289,14 +291,14 @@ def prepare(service: Service, candidate: Path, site: Path, log: Path, install: b
             shell_command(service.build_command),
             candidate,
             log,
-            process_environment(service, candidate),
+            process_environment(service, candidate, store),
         )
     elif service.type == "dynamic" and "build" in package.get("scripts", {}):
         run_build(
             [executable("npm"), "run", "build"],
             candidate,
             log,
-            process_environment(service, candidate),
+            process_environment(service, candidate, store),
         )
 
 

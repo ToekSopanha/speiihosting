@@ -177,10 +177,11 @@ def stop_daemon(store: Store) -> None:
         terminate_tree(process.pid, record["created"])
 
 
-def environment(service: Service, live: Path) -> dict[str, str]:
+def environment(service: Service, live: Path, store: Store | None = None) -> dict[str, str]:
     env = safe_environment(service.env_allow)
     # No shell evaluation and no token values printed or written to the registry.
-    env.update(app_values(live / ".env"))
+    store = store if store is not None else Store(create=False)
+    env.update(app_values(live / ".env", store.env_file(service.name)))
     prefixes = [str(live / "node_modules/.bin")]
     if service.environment_dir:
         prefixes.insert(0, str(service.environment_dir / ("Scripts" if os.name == "nt" else "bin")))

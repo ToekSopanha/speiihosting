@@ -59,14 +59,22 @@ def safe_environment(allow: list[str] = ()) -> dict[str, str]:
     }
 
 
-def app_values(path: Path) -> dict[str, str]:
+def app_values(*paths: Path) -> dict[str, str]:
+    """Load app variables in precedence order without expansion or host credentials."""
     from dotenv import dotenv_values
 
-    return {
-        key: value
-        for key, value in dotenv_values(path, interpolate=False).items()
-        if value is not None and not reserved_variable(key)
-    }
+    values = {}
+    for path in paths:
+        values.update(
+            {
+                key: value
+                for key, value in dotenv_values(
+                    path, encoding="utf-8-sig", interpolate=False
+                ).items()
+                if value is not None and not reserved_variable(key)
+            }
+        )
+    return values
 
 
 class Credentials(Protocol):
