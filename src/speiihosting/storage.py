@@ -105,7 +105,7 @@ class Store:
             self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
             if os.name != "nt":
                 self.home.chmod(0o700)
-            for directory in ("bin", "pids", "logs", "sites", "nginx", "nginx/speiihosting.d"):
+            for directory in ("bin", "pids", "logs", "sites", "nginx", "nginx/logs", "nginx/speiihosting.d"):
                 (self.home / directory).mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def lock(self):

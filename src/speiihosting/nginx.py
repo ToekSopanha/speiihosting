@@ -97,7 +97,19 @@ class Nginx:
         return [binary, "-p", self.root.as_posix() + "/", "-c", str(self.conf), *arguments]
 
     def main_config(self, services: dict[str, Service] | None = None) -> str:
-        for directory in ("client_temp", "proxy_temp", "fastcgi_temp", "uwsgi_temp", "scgi_temp"):
+        # nginx resolves relative paths (including its startup error log) against
+        # the prefix root set by -p.  Create every directory nginx may write into
+        # so it can open its startup log even before parsing the config file.
+        # This is the root cause of the Windows "CreateFile … logs/error.log …
+        # The system cannot find the path specified" error.
+        for directory in (
+            "logs",           # nginx startup error log lives here under the prefix
+            "client_temp",
+            "proxy_temp",
+            "fastcgi_temp",
+            "uwsgi_temp",
+            "scgi_temp",
+        ):
             (self.root / directory).mkdir(exist_ok=True)
         types: dict[str, list[str]] = {}
         for extension, content_type in {
@@ -117,6 +129,9 @@ class Nginx:
         )
         return f"""worker_processes 1;
 pid {quote(self.store.home / "pids/nginx.pid")};
+# error_log here uses an absolute path so it works on all platforms, but nginx
+# also writes a startup log relative to the -p prefix before reading this file.
+# The logs/ directory under the prefix is created by main_config() above.
 error_log {quote(self.store.home / "logs/nginx_error.log")} warn;
 events {{ worker_connections 1024; }}
 http {{
@@ -130,6 +145,9 @@ http {{
     client_body_timeout 15s;
     client_header_timeout 15s;
     keepalive_timeout 30s;
+    # Increase bucket size to accommodate long subdomain names (e.g. portfolio.example.com).
+    # The default of 32 bytes is too small and causes nginx to refuse to start.
+    server_names_hash_bucket_size 128;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
     access_log {quote(self.store.home / "logs/nginx_access.log")} combined;
