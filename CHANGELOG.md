@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.3.7]
+## [0.3.8]
 
 ### Added
 - Automatically load per-service variables from `env/<service-name>/.env` inside the Speiihos home directory. These override the project's `.env`, apply to builds and runtime processes, and survive deploys, rollback and removal. Restart a service to apply edits.

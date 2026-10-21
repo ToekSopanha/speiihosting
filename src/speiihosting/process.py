@@ -69,9 +69,28 @@ def detached_flags() -> dict:
     return {"start_new_session": True}
 
 
-def run_logged(command: list[str], cwd: Path, log: Path, env: dict | None = None) -> int:
+def windows_cmd_string(command: list[str]) -> str:
+    """Format a cmd.exe command list as a single command-line string on Windows.
+
+    When subprocess.Popen receives a list on Windows, it runs list2cmdline which
+    escapes quotes with \\", but cmd.exe does not recognize \\" and fails.
+    Wrapping the command argument in outer quotes allows cmd.exe /s /c to strip
+    the outer quotes and preserve all internal quotes intact.
+    """
+    prefix = " ".join(command[:-1])
+    return f'{prefix} "{command[-1]}"'
+
+
+def run_logged(command: list[str] | str, cwd: Path, log: Path, env: dict | None = None) -> int:
     logger = logger_for(log)
     try:
+        if (
+            os.name == "nt"
+            and isinstance(command, list)
+            and len(command) >= 2
+            and os.path.basename(command[0]).lower() in ("cmd", "cmd.exe")
+        ):
+            command = windows_cmd_string(command)
         child = subprocess.Popen(
             command,
             cwd=cwd,
@@ -93,7 +112,8 @@ def run_logged(command: list[str], cwd: Path, log: Path, env: dict | None = None
         thread.join(timeout=5)
         return code
     except OSError as error:
-        raise SpeiiError(f"Cannot run {command[0]}: {error}") from error
+        label = command[0] if isinstance(command, list) else command.split()[0]
+        raise SpeiiError(f"Cannot run {label}: {error}") from error
     finally:
         close_logger(logger)
 
@@ -269,8 +289,16 @@ class Worker:
         ):
             return
         try:
+            command: list[str] | str = self.command
+            if (
+                os.name == "nt"
+                and isinstance(command, list)
+                and len(command) >= 2
+                and os.path.basename(command[0]).lower() in ("cmd", "cmd.exe")
+            ):
+                command = windows_cmd_string(command)
             self.process = subprocess.Popen(
-                self.command,
+                command,
                 cwd=self.cwd,
                 env=self.env,
                 stdin=subprocess.DEVNULL,

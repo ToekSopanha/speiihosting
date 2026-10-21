@@ -36,3 +36,37 @@ def test_background_launch_is_windowless_on_windows_and_detached_on_posix(monkey
         assert not flags["creationflags"] & (0x00000008 | 0x00000010)
     else:
         assert flags == {"start_new_session": True}
+
+
+def test_windows_cmd_string_preserves_quoted_command():
+    from speiihosting.process import windows_cmd_string
+
+    cmd = ["cmd.exe", "/d", "/s", "/c", '"C:\\Program Files\\Python\\python.exe" build.py']
+    formatted = windows_cmd_string(cmd)
+    assert formatted == 'cmd.exe /d /s /c ""C:\\Program Files\\Python\\python.exe" build.py"'
+
+
+def test_run_logged_formats_windows_cmd_command(monkeypatch, tmp_path):
+    import speiihosting.process as proc
+
+    monkeypatch.setattr(proc.os, "name", "nt")
+    monkeypatch.setattr(proc.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    captured = {}
+
+    class DummyPopen:
+        def __init__(self, command, **kwargs):
+            captured["command"] = command
+            self.stdout = None
+            self.pid = 1234
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(proc.subprocess, "Popen", DummyPopen)
+    monkeypatch.setattr(proc, "pump", lambda *a: None)
+    proc.run_logged(
+        ["cmd.exe", "/d", "/s", "/c", '"python.exe" script.py'],
+        tmp_path,
+        tmp_path / "test.log",
+    )
+    assert captured["command"] == 'cmd.exe /d /s /c ""python.exe" script.py"'

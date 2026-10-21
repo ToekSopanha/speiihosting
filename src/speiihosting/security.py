@@ -22,6 +22,7 @@ BASE_VARIABLES = frozenset(
         "TEMP",
         "TMPDIR",
         "SYSTEMROOT",
+        "SYSTEMDRIVE",
         "WINDIR",
         "COMSPEC",
         "PATHEXT",
